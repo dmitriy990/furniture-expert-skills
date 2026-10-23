@@ -311,17 +311,18 @@ def split_blocks(text, ext):
     return blocks
 
 
-# ----------------------------------------------------------------- fibre parsing
+# ----------------------------------------------------------------- dictionaries
 
-PCT_RE = re.compile(r"(?<![\d.,])(\d{1,3}(?:[.,]\d{1,2})?)\s{0,3}%")
-WORD_RE = re.compile(r"(?:[^\W\d_]|['’ʼ])+(?!\d)")  # будь-які літери: uk/ru/en/de/pt/it/tr (ä, ã, é, ş…)
-CONJ_RE = re.compile(r"(?<!\w)(?:і|й|та|и|and|ve|e|et|und)(?!\w)", re.I)
-GAP_OK = re.compile(r"^[\s,/+&()\-–—]*$")
 
-WASH_MAX = {  # максимальна «розумна» температура прання, °C
-    "silk": 30, "wool": 40, "cashmere": 30, "viscose": 40, "modal": 40,
-    "acetate": 30, "acrylic": 40, "elastane": 40, "bamboo": 40,
-}
+def _token_re(tokens):
+    """Один regex на список токенів: початок слова; пробіл = 1–3 пробіли; «$» у кінці — ціле слово. Довші — першими."""
+    alts = []
+    for tok in sorted(set(x.lower() for x in tokens if isinstance(x, str) and x.strip()), key=len, reverse=True):
+        whole = tok.endswith("$")
+        body = r"\s{1,3}".join(re.escape(part) for part in tok.rstrip("$").split())
+        if body:
+            alts.append(body + (r"(?!\w)" if whole else ""))
+    return re.compile(r"(?<!\w)(?:" + "|".join(alts) + ")") if alts else None
 
 
 def _sane_range(r):
@@ -331,17 +332,28 @@ def _sane_range(r):
 
 class Lexicon(object):
     def __init__(self):
-        fj = _load_json(os.path.join(DATA_DIR, "fibres.json"), {}, limit=2000000)
-        self.fibres = fj.get("fibres", {})
-        self.codes = fj.get("codes", {})
+        mj = _load_json(os.path.join(DATA_DIR, "materials.json"), {}, limit=2000000)
+        mats = mj.get("materials") if isinstance(mj.get("materials"), dict) else {}
+        claims = mj.get("claims") if isinstance(mj.get("claims"), dict) else {}
+
+        def family(*names):
+            toks = []
+            for spec in mats.values():
+                if isinstance(spec, dict) and spec.get("family") in names and isinstance(spec.get("tokens"), list):
+                    toks.extend(spec["tokens"])
+            return _token_re(toks)
+
+        def plain(v):
+            return _token_re(v) if isinstance(v, list) else None
+
+        self.board_re = family("board")
+        self.wood_re = family("solid_wood", "veneer", "plywood")
+        self.fake_leather_re = family("artificial_leather")
+        self.wood_claim_re = plain(claims.get("solid_wood"))
+        self.leather_claim_re = plain(claims.get("genuine_leather"))
+        self.combo_re = plain(mj.get("combination_markers"))
         sp = _load_json(os.path.join(DATA_DIR, "product_specs.json"), {}, limit=2000000)
         self.specs = sp
-        # токен -> волокно; довжини токенів для швидкої перевірки префіксів
-        self._tok = {}
-        for key, spec in self.fibres.items():
-            for tok in spec.get("tokens", []):
-                self._tok.setdefault(tok.lower(), key)
-        self._lens = sorted(set(len(t) for t in self._tok))
         # для кожного виду параметра: аліас -> матеріал/виріб і один regex на всі аліаси (довші — першими)
         self.kinds = {}
         for kind in ("density", "thickness", "mattress_height"):
@@ -365,76 +377,6 @@ class Lexicon(object):
         v = (self.specs.get("dimensions") or {}).get("max_cm")
         return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0 else None
 
-    def fibre_of(self, word):
-        if word.isupper() and word in self.codes:
-            return self.codes[word]
-        lw = word.lower()
-        n = len(lw)
-        for L in self._lens:
-            if L <= n <= L + 6:
-                key = self._tok.get(lw[:L])
-                if key:
-                    return key
-        return None
-
-
-def parse_clusters(block, lex):
-    """Шукає записи складу: «80% бавовна, 20% поліестер» або «бавовна 80%, поліестер 20%».
-    Повертає список кластерів: {'pairs': [(fibre, pct)], 'start': int}."""
-    toks = []
-    spans = []
-    for m in PCT_RE.finditer(block):
-        toks.append(("N", float(m.group(1).replace(",", ".")), m.start(), m.end()))
-        a, b = max(0, m.start() - 45), min(len(block), m.end() + 45)
-        if spans and a <= spans[-1][1]:
-            spans[-1][1] = max(spans[-1][1], b)
-        else:
-            spans.append([a, b])
-    if not toks:
-        return []
-    seen = set()
-    for a, b in spans:
-        for m in WORD_RE.finditer(block, a, b):
-            if m.start() in seen:
-                continue
-            seen.add(m.start())
-            key = lex.fibre_of(m.group(0))
-            if key:
-                toks.append(("W", key, m.start(), m.end()))
-    toks.sort(key=lambda t: t[2])
-
-    groups = []
-    cur = []
-    for t in toks:
-        if cur:
-            gap = block[cur[-1][3]:t[2]]
-            gap_clean = CONJ_RE.sub(" ", gap)
-            if len(gap) > 30 or not GAP_OK.match(gap_clean):
-                groups.append(cur)
-                cur = []
-        cur.append(t)
-    if cur:
-        groups.append(cur)
-
-    clusters = []
-    for g in groups:
-        if len(g) < 2 or len(g) % 2:
-            continue
-        first = g[0][0]
-        second = "W" if first == "N" else "N"
-        ok = all(g[i][0] == (first if i % 2 == 0 else second) for i in range(len(g)))
-        if not ok:
-            continue
-        pairs = []
-        for i in range(0, len(g), 2):
-            a, b = g[i], g[i + 1]
-            n, w = (a, b) if a[0] == "N" else (b, a)
-            pairs.append((w[1], n[1]))
-        clusters.append({"pairs": pairs, "start": g[0][2]})
-    return clusters
-
-
-# ----------------------------------------------------------------------- checks
 
 # Вимірювані параметри меблів. Усі регулярні вирази працюють по рядку в нижньому регістрі; квантифікатори обмежені.
 _NUM = r"(\d{1,4}(?:[.,]\d{1,2})?)"
@@ -459,13 +401,7 @@ DIM_ONE_RE = re.compile(
     r"[^\d\n]{0,15}?(\d{1,5}(?:[.,]\d{1,2})?)\s{0,2}(?:см|cm)(?!\w)")
 UNIT_CM_RE = re.compile(r"(?<!\w)(?:см|cm)(?!\w)")
 UNIT_MM_RE = re.compile(r"(?<!\w)(?:мм|mm)(?!\w)")
-WASH_RE = re.compile(r"(?:пра\w{0,12}|стир\w{0,12}|wash\w{0,12})[^\n.;]{0,50}?(\d{2})\s{0,3}(?:°|º|˚|градус)", re.I)
-BOIL_RE = re.compile(r"кип['’ʼ]?ят|кипяч", re.I)
-NATURAL_RE = re.compile(
-    r"100\s{0,3}%\s{0,3}натурал|натуральн\w{0,8}\s{1,3}(?:тканин|склад|матеріал)|100\s{0,3}%\s{0,3}natural|"
-    r"еко[- ]?(?:тканин|дружн)", re.I)
-SILKY_RE = re.compile(r"шовков|шовкист|шелков|silk(?:y|like)|під\s{1,3}шовк", re.I)
-VISC_RE = re.compile(r"віскоз|вискоз|viscose|rayon", re.I)
+CLAUSE_SPLIT_RE = re.compile(r"[.;!?|\n]")
 
 MED_RE = re.compile(
     r"гіпоалергенн\w{0,15}|гипоаллергенн\w{0,15}|антибактеріальн\w{0,15}|антибактериальн\w{0,15}|антимікробн\w{0,15}|"
@@ -521,54 +457,7 @@ def _sev(sev, code, line, msg):
 
 def check_block(lineno, block, lex, ctx, out):
     bl = block.lower()
-    clusters = parse_clusters(block, lex)
-    in_block = {}  # fibre -> max pct
-
-    # ---- склад
-    for cl in clusters:
-        total = sum(p for _, p in cl["pairs"])
-        for key, pct in cl["pairs"]:
-            in_block[key] = max(in_block.get(key, 0), pct)
-            if pct > 100:
-                out.append(_sev("ERROR", "COMP_OVER", lineno, "частка волокна > 100 %%: «%s»" % line_snip(block, cl["start"])))
-            if key == "bamboo" and not VISC_RE.search(bl):
-                out.append(_sev(
-                    "ERROR", "COMP_BAMBOO", lineno,
-                    "у складі «бамбук» як волокно: за маркуванням це віскоза/модал — пишіть «віскоза (з бамбука)»: «%s»"
-                    % line_snip(block, cl["start"])))
-        if len(cl["pairs"]) >= 2 and abs(total - 100.0) > 0.5:
-            out.append(_sev(
-                "ERROR", "COMP_SUM", lineno,
-                "склад дає %s %% замість 100 %%: «%s»" % (("%g" % total), line_snip(block, cl["start"], 60))))
-
-    if ctx.get("bamboo_loose") is None:
-        ctx["bamboo_loose"] = True
-    if not clusters and re.search(r"бамбук|bamboo", bl) and not VISC_RE.search(bl):
-        out.append(_sev("WARN", "BAMBOO_LOOSE", lineno,
-                        "«бамбукова» тканина без уточнення «віскоза (з бамбука)» — звична підміна понять"))
-
-    # ---- маркетинг vs склад
-    if in_block:
-        fam = set(lex.fibres.get(k, {}).get("family") for k in in_block)
-        if NATURAL_RE.search(bl) and (fam & {"synthetic", "regenerated", "invalid"}):
-            out.append(_sev("WARN", "NATURAL_CLAIM", lineno,
-                            "заява «натуральний/еко» суперечить складу (синтетика або віскоза/модал/ліоцел — це не «натуральні» волокна)"))
-        if SILKY_RE.search(bl) and "silk" not in in_block:
-            out.append(_sev("WARN", "SILK_CLAIM", lineno,
-                            "«шовковий/шовковистий» у тексті, а шовку у складі немає — формулюйте «атласний, з ефектом шовку»"))
-        # прання
-        for m in WASH_RE.finditer(block):
-            t = int(m.group(1))
-            bad = [(k, WASH_MAX[k]) for k in in_block if k in WASH_MAX and t > WASH_MAX[k]]
-            if bad:
-                k, lim = sorted(bad, key=lambda x: x[1])[0]
-                out.append(_sev(
-                    "WARN", "WASH_TEMP", lineno,
-                    "прання при %d° для складу з «%s» (%g %%): ризик усадки/пошкодження, зазвичай ≤ %d° — звірте з ярликом виробника"
-                    % (t, lex.fibres.get(k, {}).get("uk", k), in_block[k], lim)))
-        if BOIL_RE.search(bl) and any(k not in ("cotton", "linen", "hemp") for k in in_block):
-            out.append(_sev("WARN", "BOIL", lineno, "«кип'ятіння» для суміші з нестійкими волокнами — не рекомендуйте"))
-
+    check_materials(lineno, bl, lex, out)
     check_specs(lineno, bl, lex, out)
     check_dimensions(lineno, bl, lex, out)
 
@@ -587,6 +476,32 @@ def check_block(lineno, block, lex, ctx, out):
         ctx["seen"].add(("origin",))
         out.append(_sev("WARN", "CLAIM_ORIGIN", lineno,
                         "«єгипетська/Giza/Pima/Supima» — потрібне документальне підтвердження походження сировини"))
+
+
+def check_materials(lineno, bl, lex, out):
+    """Заяви про матеріал, що суперечать матеріалу в тому ж реченні (частині тексту до . ; ! ? | або кінця рядка)."""
+    done = set()
+    pos = 0
+    for clause in CLAUSE_SPLIT_RE.split(bl):
+        start, pos = pos, pos + len(clause) + 1
+        if "MAT_SOLID_WOOD" not in done and lex.board_re and lex.wood_claim_re:
+            claim = lex.wood_claim_re.search(clause)
+            board = claim and lex.board_re.search(clause)
+            if board and not (lex.wood_re and lex.wood_re.search(clause)):
+                done.add("MAT_SOLID_WOOD")
+                out.append(_sev(
+                    "ERROR", "MAT_SOLID_WOOD", lineno,
+                    "«%s» поруч із плитою «%s» без породи деревини: «%s» — ДСП/МДФ/ДВП не є масивом; назвіть породу "
+                    "для дерев'яних частин або приберіть заяву" % (claim.group(0), board.group(0), snip(clause, 60))))
+        if "MAT_LEATHER" not in done and lex.fake_leather_re and lex.leather_claim_re:
+            claim = lex.leather_claim_re.search(clause)
+            fake = claim and lex.fake_leather_re.search(clause)
+            if fake and not (lex.combo_re and lex.combo_re.search(clause)):
+                done.add("MAT_LEATHER")
+                out.append(_sev(
+                    "ERROR", "MAT_LEATHER", lineno,
+                    "«%s» в одному описі з «%s»: «%s» — уточніть, які частини з якого матеріалу (сидіння — шкіра, "
+                    "боковини — екошкіра) або приберіть заяву" % (claim.group(0), fake.group(0), snip(clause, 60))))
 
 
 def _num(s):

@@ -94,40 +94,49 @@ class LintBase(Sandbox):
         return self.write(name, "# Комплект\n\n" + body + "\n", **kw)
 
 
-# =================================================================== lint_content: склад
+# =================================================================== lint_content: матеріали
 
-class LintComposition(LintBase):
-    def test_composition_not_100_is_error(self):
-        p = self.card("Склад: 70% бавовна, 20% поліестер.")
-        self.assertIn(("ERROR", "COMP_SUM"), self.codes(p))
+class LintMaterials(LintBase):
+    def test_mdf_called_natural_wood_is_error(self):
+        self.assertEqual(self.codes(self.card("Фасад МДФ, натуральне дерево.")), [("ERROR", "MAT_SOLID_WOOD")])
 
-    def test_composition_100_is_clean(self):
-        p = self.card("Склад: 80% бавовна, 20% поліестер.")
-        self.assertEqual(self.codes(p), [])
+    def test_veneer_and_named_species_are_clean(self):
+        self.assertEqual(self.codes(self.card("Фасад МДФ, шпон дуба.")), [])
+        self.assertEqual(self.codes(self.card("Стільниця: масив дуба.", name="oak.md")), [])
+        self.assertEqual(self.codes(self.card("Каркас: масив сосни та ДСП.", name="pine.md")), [])
+        self.assertEqual(self.codes(self.card("Ліжко з натурального дерева (бук), основа ДСП.", name="b.md")), [])
 
-    def test_fibre_first_order_is_understood(self):
-        p = self.card("Склад: бавовна 60%, поліестер 40%.")
-        self.assertEqual(self.codes(p), [])
+    def test_solid_wood_claim_with_board_in_one_sentence_is_error(self):
+        self.assertEqual(self.codes(self.card("Шафа з масиву, корпус ЛДСП.")), [("ERROR", "MAT_SOLID_WOOD")])
+        self.assertIn(("ERROR", "MAT_SOLID_WOOD"), self.codes(self.card("Стол из массива, ДСП.", name="ru.md")))
+        self.assertEqual(self.codes(self.card("Desk made of solid wood, MDF top.", name="en.md")), [("ERROR", "MAT_SOLID_WOOD")])
 
-    def test_german_and_portuguese_compositions_are_parsed(self):
-        self.assertEqual(self.codes(self.card("80% Baumwolle, 20% Polyester", name="de.md")), [])
-        self.assertEqual(self.codes(self.card("95% algodão, 5% elastano", name="pt.md")), [])
-        self.assertIn(("ERROR", "COMP_SUM"), self.codes(self.card("80% Baumwolle, 10% Polyester", name="de2.md")))
+    def test_adjective_massive_is_not_a_claim(self):
+        self.assertEqual(self.codes(self.card("Масивні ніжки, корпус ДСП.")), [])
 
-    def test_english_composition_sum(self):
-        self.assertIn(("ERROR", "COMP_SUM"), self.codes(self.card("70% cotton 20% polyester", name="en.md")))
+    def test_claim_and_board_in_different_sentences_are_not_checked(self):
+        self.assertEqual(self.codes(self.card("Шафа з масиву. Корпус ЛДСП.")), [])
 
-    def test_share_over_100_is_error(self):
-        self.assertIn(("ERROR", "COMP_OVER"), self.codes(self.card("Склад: 120% бавовна.")))
+    def test_eco_leather_called_genuine_is_error(self):
+        self.assertEqual(self.codes(self.card("Оббивка: екошкіра (PU), натуральна шкіра.")), [("ERROR", "MAT_LEATHER")])
+        self.assertEqual(self.codes(self.card("Upholstery: PU leather, genuine leather look.", name="en.md")), [("ERROR", "MAT_LEATHER")])
 
-    def test_bamboo_as_fibre_is_error(self):
-        self.assertIn(("ERROR", "COMP_BAMBOO"), self.codes(self.card("Склад: Бамбук 100%.")))
+    def test_genuine_leather_alone_is_clean(self):
+        self.assertEqual(self.codes(self.card("Оббивка: натуральна шкіра.")), [])
 
-    def test_viscose_from_bamboo_is_accepted(self):
-        self.assertNotIn(("ERROR", "COMP_BAMBOO"), self.codes(self.card("Склад: 100% віскоза (з бамбука).")))
+    def test_stated_combination_is_clean(self):
+        self.assertEqual(self.codes(self.card("Сидіння — натуральна шкіра, боковини — екошкіра.")), [])
 
-    def test_loose_bamboo_wording_is_warning(self):
-        self.assertIn(("WARN", "BAMBOO_LOOSE"), self.codes(self.card("Бамбукова тканина для літа.")))
+    def test_pu_lacquer_and_pvc_edging_are_not_eco_leather(self):
+        self.assertEqual(self.codes(self.card("Фасади МДФ з PU-лаком, оббивка — натуральна шкіра.")), [])
+        self.assertEqual(self.codes(self.card("Корпус ЛДСП, кромка ПВХ, узголів'я — натуральна шкіра.", name="pvc.md")), [])
+
+    def test_each_material_error_once_per_block(self):
+        p = self.card("Фасад МДФ, натуральне дерево; корпус ДСП, натуральне дерево.")
+        self.assertEqual(self.codes(p), [("ERROR", "MAT_SOLID_WOOD")])
+
+    def test_line_marker_skips_the_check(self):
+        self.assertEqual(self.codes(self.card("Фасад МДФ, натуральне дерево. furniture-expert:ok")), [])
 
 
 # =================================================================== lint_content: параметри та габарити
@@ -233,22 +242,6 @@ class LintClaims(LintBase):
     def test_origin_claim_is_warning(self):
         self.assertIn(("WARN", "CLAIM_ORIGIN"), self.codes(self.card("Єгипетська бавовна найвищої якості.")))
 
-    def test_natural_claim_with_synthetic_is_warning(self):
-        p = self.card("100% натуральний комплект. Склад: 80% бавовна, 20% поліестер.")
-        self.assertIn(("WARN", "NATURAL_CLAIM"), self.codes(p))
-
-    def test_silky_claim_without_silk_is_warning(self):
-        p = self.card("Шовковистий на дотик. Склад: 100% поліестер.")
-        self.assertIn(("WARN", "SILK_CLAIM"), self.codes(p))
-
-    def test_hot_wash_for_silk_is_warning(self):
-        p = self.card("Склад: 100% шовк. Прання при 60°.")
-        self.assertIn(("WARN", "WASH_TEMP"), self.codes(p))
-
-    def test_warm_wash_for_cotton_is_clean(self):
-        p = self.card("Склад: 100% бавовна. Прання при 40°.")
-        self.assertNotIn(("WARN", "WASH_TEMP"), self.codes(p))
-
 
 # =================================================================== lint_content: витік закупівельних даних
 
@@ -329,7 +322,7 @@ class LintLanguageAndSkips(LintBase):
 
     def test_readme_and_skill_files_are_never_linted(self):
         for name in ("README.md", "SKILL.md", "CLAUDE.md", "CHANGELOG.md"):
-            p = self.card("Собівартість 150 грн. Склад: 70% бавовна.", name=name)
+            p = self.card("Собівартість 150 грн. Фасад: МДФ, натуральне дерево.", name=name)
             self.assertEqual(self.lint(p)[1], [], name)
 
     def test_non_text_extension_is_ignored(self):
@@ -337,11 +330,11 @@ class LintLanguageAndSkips(LintBase):
         self.assertEqual(self.lint(p)[1], [])
 
     def test_html_markup_is_stripped_before_checks(self):
-        p = self.write("page.html", "<html><body><p>Склад: 70% <b>бавовна</b>, 20% поліестер.</p></body></html>")
-        self.assertIn(("ERROR", "COMP_SUM"), self.codes(p))
+        p = self.write("page.html", "<html><body><p>Фасад: <b>МДФ</b>, натуральне дерево.</p></body></html>")
+        self.assertIn(("ERROR", "MAT_SOLID_WOOD"), self.codes(p))
 
     def test_cli_exit_code_follows_errors(self):
-        self.assertEqual(self.lint(self.card("Склад: 70% бавовна, 20% поліестер."))[0], 1)
+        self.assertEqual(self.lint(self.card("Фасад: МДФ, натуральне дерево."))[0], 1)
         self.assertEqual(self.lint(self.card("Наповнювач: ППУ 50 кг/м³."), )[0], 0)  # лише WARN
         self.assertEqual(self.lint(self.card("Просто текст.", name="ok.md"))[0], 0)
 
@@ -353,16 +346,16 @@ class LintHookMode(LintBase):
         return self.hook("lint_content.py", {"cwd": cwd or self.proj, "tool_name": tool, "tool_input": {"file_path": path}}, **kw)
 
     def test_error_blocks_with_reason(self):
-        p = self.card("Склад: 70% бавовна, 20% поліестер.")
+        p = self.card("Фасад: МДФ, натуральне дерево.")
         rc, out, err = self.post(p)
         self.assertEqual(rc, 0)
         d = json.loads(out)
         self.assertEqual(d["decision"], "block")
-        self.assertIn("COMP_SUM", d["reason"])
+        self.assertIn("MAT_SOLID_WOOD", d["reason"])
         self.assertIn("card.md", d["reason"])
 
     def test_edit_and_multiedit_are_linted_too(self):
-        p = self.card("Склад: 70% бавовна, 20% поліестер.")
+        p = self.card("Фасад: МДФ, натуральне дерево.")
         for tool in ("Edit", "MultiEdit"):
             self.assertEqual(json.loads(self.post(p, tool=tool)[1])["decision"], "block", tool)
 
@@ -375,7 +368,7 @@ class LintHookMode(LintBase):
         self.assertIn("SPEC_RANGE", d["hookSpecificOutput"]["additionalContext"])
 
     def test_error_plus_warning_blocks_and_keeps_warning(self):
-        p = self.card("Склад: 70% бавовна, 20% поліестер. Гіпоалергенна.")
+        p = self.card("Фасад: МДФ, натуральне дерево. Гіпоалергенний.")
         d = json.loads(self.post(p)[1])
         self.assertEqual(d["decision"], "block")
         self.assertIn("CLAIM_MED", d["hookSpecificOutput"]["additionalContext"])
@@ -385,13 +378,13 @@ class LintHookMode(LintBase):
 
     def test_project_config_can_turn_blocking_off(self):
         self.project_config({"lint_block_on_error": False})
-        p = self.card("Склад: 70% бавовна, 20% поліестер.")
+        p = self.card("Фасад: МДФ, натуральне дерево.")
         d = json.loads(self.post(p)[1])
         self.assertNotIn("decision", d)
-        self.assertIn("COMP_SUM", d["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("MAT_SOLID_WOOD", d["hookSpecificOutput"]["additionalContext"])
 
     def test_relative_path_is_resolved_against_cwd(self):
-        self.card("Склад: 70% бавовна, 20% поліестер.")
+        self.card("Фасад: МДФ, натуральне дерево.")
         rc, out, err = self.hook("lint_content.py", {"cwd": self.proj, "tool_name": "Write", "tool_input": {"file_path": "card.md"}})
         self.assertEqual(json.loads(out)["decision"], "block")
 
@@ -736,7 +729,7 @@ class ShippedData(unittest.TestCase):
             return json.loads(f.read().decode("utf-8"))
 
     def test_data_files_are_valid_json(self):
-        for name in ("config.json", "fibres.json", "product_specs.json"):
+        for name in ("config.json", "materials.json", "product_specs.json"):
             self.assertIsInstance(self.load(name), dict, name)
 
     def test_shipped_config_has_no_confidential_terms_and_a_valid_date(self):
@@ -778,7 +771,7 @@ class ConfigHardening(Sandbox):
 
     def triggers(self):
         """Для кожного хука — вхід, на який він за типових налаштувань реагує, і ознака реакції."""
-        card = self.write("card.md", "Склад: 70% бавовна, 20% поліестер.\n")
+        card = self.write("card.md", "Фасад: МДФ, натуральне дерево.\n")
         return {
             "lint_content.py": ({"cwd": self.proj, "tool_name": "Write", "tool_input": {"file_path": card}}, '"decision": "block"'),
             "price_guard.py": ({"cwd": self.proj, "tool_name": "Write",
@@ -873,7 +866,7 @@ class OutputSanitizing(Sandbox):
             self.skipTest("файлова система не приймає таку назву")
 
     def test_filename_with_newline_cannot_add_lines_to_a_block_reason(self):
-        p = self.make(u"a\n" + INJECT + u".md", u"Склад: 70% бавовна, 20% поліестер.\n")
+        p = self.make(u"a\n" + INJECT + u".md", u"Фасад: МДФ, натуральне дерево.\n")
         self.assert_clean(self.lint(p), "block/filename")
 
     def test_filename_with_newline_cannot_add_lines_to_a_warning(self):
@@ -881,7 +874,7 @@ class OutputSanitizing(Sandbox):
         self.assert_clean(self.lint(p), "warn/filename")
 
     def test_long_filename_is_capped(self):
-        p = self.make(u"x" * 200 + u".md", u"Склад: 70% бавовна, 20% поліестер.\n")
+        p = self.make(u"x" * 200 + u".md", u"Фасад: МДФ, натуральне дерево.\n")
         first = self.lint(p).split("\n")[0]
         self.assertLess(len(first), 400)
 
@@ -907,10 +900,10 @@ class OutputSanitizing(Sandbox):
         self.assert_clean(json.loads(out)["hookSpecificOutput"]["permissionDecisionReason"], "price_guard/mcp id")
 
     def test_ordinary_ukrainian_text_survives_sanitizing(self):
-        p = self.make("card.md", u"Склад: 70% бавовна, 20% поліестер.\n")
+        p = self.make("card.md", u"Фасад: МДФ, натуральне дерево.\n")
         reason = self.lint(p)
-        self.assertIn(u"бавовна", reason)
-        self.assertIn(u"COMP_SUM", reason)
+        self.assertIn(u"натуральне дерево", reason)
+        self.assertIn(u"MAT_SOLID_WOOD", reason)
 
 
 # =================================================================== lint_content: вхідні межі й хибні спрацьовування
@@ -926,7 +919,7 @@ def load_lint_module():
 
 
 class LintEntityBomb(LintBase):
-    BAD = u"Склад: 70% бавовна, 20% поліестер.\n"
+    BAD = u"Фасад: МДФ, натуральне дерево.\n"
 
     def post(self, path, **kw):
         return self.hook("lint_content.py", {"cwd": self.proj, "tool_name": "Write", "tool_input": {"file_path": path}}, **kw)
@@ -958,7 +951,7 @@ class LintEntityBomb(LintBase):
             raise RuntimeError("boom")
         m.check_public_text = boom
         issues = m.lint_text(self.BAD, ".md", m.load_config(None), True)
-        self.assertIn("COMP_SUM", [i["code"] for i in issues])
+        self.assertIn("MAT_SOLID_WOOD", [i["code"] for i in issues])
 
 
 class LintMarkupLeaks(LintBase):
@@ -1067,7 +1060,7 @@ class Utf8Stdin(Sandbox):
         return decode(p.stdout).strip().lower().replace("-", "")
 
     def test_lint_content_with_a_cyrillic_path_in_a_non_utf8_locale(self):
-        p = self.write(u"картка.md", "Склад: 70% бавовна, 20% поліестер.\n", folder=u"каталог")
+        p = self.write(u"картка.md", "Фасад: МДФ, натуральне дерево.\n", folder=u"каталог")
         rc, out, err = self.c_locale("lint_content.py", {"cwd": self.proj, "tool_name": "Write", "tool_input": {"file_path": p}})
         self.assertEqual(rc, 0)
         if self.child_filesystem_encoding() == "utf8":
@@ -1110,7 +1103,7 @@ class ShippedHookWrapper(Sandbox):
         return found
 
     def payload(self):
-        card = self.write("card.md", u"Склад: 70% бавовна, 20% поліестер.\n")
+        card = self.write("card.md", u"Фасад: МДФ, натуральне дерево.\n")
         return json.dumps({"cwd": self.proj, "tool_name": "Write", "tool_input": {"file_path": card}}, ensure_ascii=False).encode("utf-8")
 
     def sh(self, command, env, stdin=b""):
@@ -1246,7 +1239,7 @@ class FailOpen(Sandbox):
         for junk in (b"{not json", b"[]", b"null", b"\xff\xfe", b'{"min_gross_margin_pct": "high", "confidential_terms": 5}'):
             with open(os.path.join(d, "furniture-expert.json"), "wb") as f:
                 f.write(junk)
-            p = self.write("card.md", "Склад: 70% бавовна, 20% поліестер.\n")
+            p = self.write("card.md", "Фасад: МДФ, натуральне дерево.\n")
             rc, out, err = self.hook("lint_content.py", {"cwd": self.proj, "tool_name": "Write", "tool_input": {"file_path": p}})
             self.assertEqual(json.loads(out)["decision"], "block", junk)  # типові налаштування діють
 

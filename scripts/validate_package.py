@@ -37,7 +37,7 @@ REFERENCES = [
     "origins-by-country.md", "quality-control.md", "ukraine-legal.md",
 ]
 HOOK_SCRIPTS = {"PostToolUse": "lint_content.py", "PreToolUse": "price_guard.py", "Stop": "stop_check.py"}
-DATA_FILES = ["config.json", "fibres.json", "product_specs.json"]
+DATA_FILES = ["config.json", "materials.json", "product_specs.json"]
 REQUIRED_FILES = [
     "SKILL.md", "README.md", "LICENSE", ".gitignore",
     ".claude-plugin/plugin.json", ".claude-plugin/marketplace.json",
@@ -513,6 +513,20 @@ def validate(root: Path) -> list[tuple[str, bool, str]]:
     if not (isinstance(max_cm, (int, float)) and not isinstance(max_cm, bool) and max_cm > 0):
         insane.append("dimensions.max_cm")
     check("every product spec has aliases and a sane range", items > 0 and not insane, ", ".join(insane))
+    mats = data["materials.json"][0] if isinstance(data["materials.json"][0], dict) else {}
+
+    def tokens(v):
+        return isinstance(v, list) and len(v) > 0 and all(isinstance(x, str) and x.strip() for x in v)
+
+    entries = mats.get("materials") if isinstance(mats.get("materials"), dict) else {}
+    families = {"board", "plywood", "veneer", "solid_wood", "artificial_leather"}
+    broken = [k for k, v in entries.items() if not (isinstance(v, dict) and v.get("family") in families and tokens(v.get("tokens")))]
+    claims = mats.get("claims") if isinstance(mats.get("claims"), dict) else {}
+    broken += [f"claims.{k}" for k in ("solid_wood", "genuine_leather") if not tokens(claims.get(k))]
+    present = {v.get("family") for v in entries.values() if isinstance(v, dict)}
+    broken += [f"no {f} material" for f in ("board", "solid_wood", "artificial_leather") if f not in present]
+    check("every material has a known family and tokens; both claim lists are present", bool(entries) and not broken,
+          ", ".join(broken))
 
     # 7. Evals -------------------------------------------------------------------------------------------------------------------------
     payload, err = load_json(root, "evals/cases.json")
@@ -719,7 +733,8 @@ def mutations():
         ("unknown config key", _json("data/config.json", lambda d: d.update({"surprise": 1}))),
         ("spec with an inverted range", _json("data/product_specs.json", lambda d: d["density"]["items"][0].update({"range": [45, 16]}))),
         ("spec without a dimension limit", _json("data/product_specs.json", lambda d: d["dimensions"].pop("max_cm"))),
-        ("data file corrupted", _write("data/fibres.json", "{not json")),
+        ("data file corrupted", _write("data/materials.json", "{not json")),
+        ("material without tokens", _json("data/materials.json", lambda d: d["materials"]["mdf"].update({"tokens": []}))),
         ("plugin version not bumped", _json(".claude-plugin/plugin.json", lambda d: d.update({"version": "0.0.1"}))),
         ("plugin author with an e-mail", _json(".claude-plugin/plugin.json", lambda d: d["author"].update({"email": "a@example.com"}))),
         ("license mismatch", _json(".claude-plugin/plugin.json", lambda d: d.update({"license": "Proprietary"}))),

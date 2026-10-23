@@ -1,0 +1,76 @@
+{
+  "_comment": "Словник матеріалів для lint-хука. tokens — початки слів у нижньому регістрі (uk/ru/en/pl); пробіл = будь-який пробіл; «$» у кінці — ціле слово. family: board (плитні матеріали) | plywood | veneer | solid_wood (породи деревини) | artificial_leather. claims — заяви, які не можна робити про плиту чи штучну шкіру. combination_markers — слова, що означають свідоме поєднання матеріалів (сидіння — шкіра, боковини — екошкіра). Можна редагувати.",
+  "materials": {
+    "chipboard": {
+      "uk": "ДСП/ЛДСП",
+      "family": "board",
+      "tokens": ["дсп", "лдсп", "дстп", "лдстп", "chipboard", "particleboard", "płyta wiórowa", "plyta wiorowa", "płyty wiórowej", "plyty wiorowej"]
+    },
+    "mdf": {
+      "uk": "МДФ",
+      "family": "board",
+      "tokens": ["мдф", "mdf$"]
+    },
+    "hdf": {
+      "uk": "ДВП/HDF",
+      "family": "board",
+      "tokens": ["двп", "hdf$", "оргаліт", "оргалит", "hardboard"]
+    },
+    "osb": {
+      "uk": "OSB",
+      "family": "board",
+      "tokens": ["osb$", "осб$"]
+    },
+    "plywood": {
+      "uk": "фанера",
+      "family": "plywood",
+      "tokens": ["фанер", "plywood", "sklejk"]
+    },
+    "veneer": {
+      "uk": "шпон",
+      "family": "veneer",
+      "tokens": ["шпон", "veneer", "fornir"]
+    },
+    "wood_species": {
+      "uk": "порода деревини",
+      "family": "solid_wood",
+      "tokens": [
+        "дуб", "бук$", "бука$", "буку$", "сосн", "ясен", "вільх", "ольх", "берез", "горіх", "горих", "орех", "тик$", "тику$",
+        "акаці", "акаци", "гевеї", "гевея", "гевеи", "ялин", "модрин", "лиственниц", "черешн", "вишн", "клен", "кедр",
+        "брус", "oak$", "beech", "pine$", "ash$", "walnut", "teak", "acacia", "rubberwood", "rubber wood", "birch",
+        "alder", "maple", "cherry", "dąb", "dębow", "dab$", "dębu", "buk$", "bukow", "sosn", "jesion", "brzoz", "olch",
+        "orzech"
+      ]
+    },
+    "eco_leather": {
+      "uk": "екошкіра",
+      "family": "artificial_leather",
+      "tokens": [
+        "екошкір", "еко-шкір", "еко шкір", "экокож", "эко-кож", "штучна шкіра", "штучної шкіри", "штучну шкіру",
+        "искусственная кожа", "искусственной кожи", "кожзам", "шкірозамінник", "кожезаменител", "pu-шкір", "pu шкір",
+        "шкіра pu", "шкіра пу", "шкіра пвх", "пвх-шкір", "ekoskór", "eko skór", "eko-skór", "skóra ekologiczna", "skora ekologiczna", "faux leather",
+        "artificial leather", "synthetic leather", "pu leather", "pvc leather", "vegan leather", "leatherette"
+      ]
+    }
+  },
+  "claims": {
+    "solid_wood": [
+      "натуральне дерево", "натурального дерева", "натуральним деревом", "натуральному дереві", "натуральна деревина",
+      "натуральної деревини", "натуральну деревину", "натуральное дерево", "натуральным деревом", "натуральная древесина",
+      "натуральной древесины", "масив$", "масиву$", "масивом$", "массив$", "массива$", "массивом$", "суцільн дерев",
+      "суцільної деревини", "100% дерев", "100 % дерев", "solid wood", "real wood", "lite drewno", "litego drewna",
+      "drewno lite", "drewna litego"
+    ],
+    "genuine_leather": [
+      "натуральна шкіра", "натуральної шкіри", "натуральну шкіру", "натуральною шкірою", "натуральній шкірі",
+      "натуральная кожа", "натуральной кожи", "натуральную кожу", "натуральной кожей", "100% шкіра", "100 % шкіра",
+      "genuine leather", "real leather", "full grain leather", "skóra naturalna", "skory naturalnej", "skóry naturalnej",
+      "naturalna skóra", "naturalnej skóry"
+    ]
+  },
+  "combination_markers": [
+    "комбінов", "комбинир", "поєднан", "сочетан", "combined", "combination", "контактн", "сидінн", "сиденье",
+    "сиденья", "боковин", "спинк", "підлокітник", "подлокотник", "зовнішн", "наружн", "частково", "частично",
+    "лицьов", "лицев", "siedzisk", "boczk"
+  ]
+}
