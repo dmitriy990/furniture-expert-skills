@@ -61,7 +61,7 @@ SKIP_CLAUDE_SUBDIRS = {"skills", "agents", "commands", "plugins", "rules", "hook
 
 DEFAULT_CONFIG = {
     "min_gross_margin_pct": 20,
-    "price_outlier_ratio": 30,
+    "price_outlier_ratio": 8,
     "lint_block_on_error": True,
     "stop_check_enabled": True,
     "legal_as_of": "",

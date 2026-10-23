@@ -504,6 +504,21 @@ class PriceGuard(Sandbox):
         rows = "".join("S%d,%d\n" % (i, p) for i, p in enumerate((100, 110, 120, 130, 1)))
         self.assertEqual(self.write_csv("sku,price\n" + rows)[0], "ask")
 
+    def test_a_single_extra_zero_asks(self):
+        rows = "".join("T%d,%d\n" % (i, p) for i, p in enumerate((12400, 124000, 7900, 11800, 9900)))
+        decision, reason = self.write_csv("sku,price\n" + rows)
+        self.assertEqual(decision, "ask")
+        self.assertIn("124000", reason)
+
+    def test_mixed_furniture_prices_within_the_ratio_pass(self):
+        rows = "".join("M%d,%d\n" % (i, p) for i, p in enumerate((3900, 8900, 14500, 27900, 31900)))
+        self.assertEqual(self.write_csv("sku,price\n" + rows), (None, ""))
+
+    def test_outlier_ratio_comes_from_project_config(self):
+        rows = "".join("T%d,%d\n" % (i, p) for i, p in enumerate((12400, 124000, 7900, 11800, 9900)))
+        self.project_config({"price_outlier_ratio": 30})
+        self.assertEqual(self.write_csv("sku,price\n" + rows), (None, ""))
+
     def test_outlier_check_needs_five_rows(self):
         rows = "".join("S%d,%d\n" % (i, p) for i, p in enumerate((100, 110, 120, 10000)))
         self.assertEqual(self.write_csv("sku,price\n" + rows), (None, ""))

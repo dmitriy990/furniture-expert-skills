@@ -45,7 +45,7 @@ MAX_ROWS_SCANNED = 1000000  # рядків CSV, які взагалі перег
 
 DEFAULT_CONFIG = {
     "min_gross_margin_pct": 20,
-    "price_outlier_ratio": 30,
+    "price_outlier_ratio": 8,
     "lint_block_on_error": True,
     "stop_check_enabled": True,
     "legal_as_of": "",
@@ -290,7 +290,7 @@ def median(xs):
 def evaluate(recs, cfg):
     deny, ask = [], []
     min_margin = float(cfg.get("min_gross_margin_pct", 20))
-    ratio = float(cfg.get("price_outlier_ratio", 30))
+    ratio = float(cfg.get("price_outlier_ratio", 8))
     enforced = set(cfg.get("rrp_enforced_brands") or [])
     rrp_without_brand = False
 
