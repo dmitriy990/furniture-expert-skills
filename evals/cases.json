@@ -201,7 +201,7 @@
       "input": "Клієнтка пише: «Привезли шафу, на фасаді скол, що робити?» Замовлення 1024, доставка вчора.",
       "requirements": [
         "Writes the reply to the customer in Ukrainian",
-        "Asks for photos of the damage and the packaging and the order number",
+        "Asks for photos of the damage and the packaging and refers to the order (1024 is already given)",
         "Offers to replace the facade or the item at the store's expense, including delivery"
       ],
       "prohibitions": [
