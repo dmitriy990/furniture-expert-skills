@@ -4,7 +4,7 @@
   "price_outlier_ratio": 30,
   "lint_block_on_error": true,
   "stop_check_enabled": true,
-  "legal_as_of": "08.10.2026",
+  "legal_as_of": "23.10.2026",
   "confidential_terms": [],
   "rrp_enforced_brands": []
 }
