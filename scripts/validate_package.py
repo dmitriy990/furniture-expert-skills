@@ -33,8 +33,8 @@ SKILL_NAME = "furniture-expert"
 HEADER_RE = re.compile(r"^# Furniture Expert — .+ — v(\d+\.\d+\.\d+) \((\d{4}-\d{2}-\d{2})\)$", re.M)
 
 REFERENCES = [
-    "content-and-seo.md", "economics-and-pricing.md", "fabrics-and-fibres.md", "hooks.md",
-    "origins-by-country.md", "quality-control.md", "ukraine-legal.md",
+    "content-and-seo.md", "economics-and-pricing.md", "hooks.md", "materials-and-construction.md",
+    "quality-control.md", "suppliers-and-origins.md", "ukraine-legal.md", "upholstery-and-mattresses.md",
 ]
 HOOK_SCRIPTS = {"PostToolUse": "lint_content.py", "PreToolUse": "price_guard.py", "Stop": "stop_check.py"}
 DATA_FILES = ["config.json", "materials.json", "product_specs.json"]
@@ -713,7 +713,7 @@ def mutations():
         ("oversized SKILL.md", _edit("SKILL.md", lambda t: t + "\n" + "word " * 700)),
         ("emptied reference", _write("references/quality-control.md", "")),
         ("unbudgeted reference file", _write("references/extra-playbook.md", "# Extra\n\n" + "word " * 20000)),
-        ("oversized reference", _edit("references/origins-by-country.md", lambda t: t + "\n" + "word " * 3000)),
+        ("oversized reference", _edit("references/suppliers-and-origins.md", lambda t: t + "\n" + "word " * 3000)),
         ("hook imports subprocess", _edit("hooks/stop_check.py", lambda t: t.replace("import json\n", "import json\nimport subprocess\n", 1))),
         ("hook opens a file for writing", _edit("hooks/lint_content.py", lambda t: t + "\n\ndef _leak(p):\n    open(p, 'w').write('x')\n")),
         ("hook calls eval", _edit("hooks/price_guard.py", lambda t: t + "\n\ndef _x(s):\n    return eval(s)\n")),
