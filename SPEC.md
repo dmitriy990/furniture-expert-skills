@@ -237,8 +237,8 @@ def main():
    test asserts it.
 7. `ukraine-legal.md` has an "as of" date and a primary source for every rule. Nothing in it is
    undated.
-8. `evals/cases.json` has ≥ 12 well-formed cases meeting the coverage above. A first manual run is
-   recorded in the PR, not in the repo.
+8. `evals/cases.json` has ≥ 12 well-formed cases meeting the coverage above. The results of a first
+   manual run are reported to you and not committed.
 9. The version is v1.0.0 and agrees across `SKILL.md`, `plugin.json` and `README.md`. Installing from the
    marketplace commands in the README works once the repo has a `main` branch.
 
