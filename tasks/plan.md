@@ -53,26 +53,26 @@ T17 needs every reference and hook in place, because `SKILL.md` routes to them a
 ## Task List
 
 ### Phase 1: Foundation
-- [ ] T1: Renamed template, green baseline
+- [x] T1: Renamed template, green baseline
 
 ### Checkpoint 1
-- [ ] Export check, self-test and tests pass. No `textile-expert`/`ivatech-textile` strings remain.
+- [x] Export check, self-test and tests pass. No `textile-expert`/`ivatech-textile` strings remain.
 
 ### Phase 2: Checks and calculator (highest technical risk first)
-- [ ] T2: Product spec ranges and dimension checks
-- [ ] T3: Material contradiction checks
-- [ ] T4: Furniture claims, origin, leak and language lists
+- [x] T2: Product spec ranges and dimension checks
+- [x] T3: Material contradiction checks
+- [x] T4: Furniture claims, origin, leak and language lists
 
 ### Checkpoint 2: lint
-- [ ] Every lint example from SPEC success criterion 5 behaves as stated. Tests green.
+- [x] Every lint example from SPEC success criterion 5 behaves as stated. Tests green.
 
-- [ ] T5: Per-manufacturer RRP check in `price_guard`
-- [ ] T6: `stop_check` for furniture topics
-- [ ] T7: Calculator import mode (m³ freight)
-- [ ] T8: Calculator local mode (VAT, dropship, Kyiv free delivery, RRP gap)
+- [x] T5: Per-manufacturer RRP check in `price_guard`
+- [x] T6: `stop_check` for furniture topics
+- [x] T7: Calculator import mode (m³ freight)
+- [x] T8: Calculator local mode (VAT, dropship, Kyiv free delivery, RRP gap)
 
 ### Checkpoint 3: behaviour review with you
-- [ ] All tests green, also under Python 3.9 if uv can install it here.
+- [x] All tests green, also under Python 3.9 (installed with uv), 3.12 and 3.13.
 - [ ] I send you sample outputs (lint messages, price-check asks, both calculator modes) and the ranges
       in `data/product_specs.json`. You confirm before content work starts.
 

@@ -471,9 +471,9 @@ def _sev(sev, code, line, msg):
 
 def check_block(lineno, block, lex, ctx, out):
     bl = block.lower()
-    check_materials(lineno, bl, lex, out)
+    check_materials(lineno, block, bl, lex, out)
     check_specs(lineno, bl, lex, out)
-    check_dimensions(lineno, bl, lex, out)
+    check_dimensions(lineno, block, bl, lex, out)
 
     # ---- заяви, що потребують доказів (одноразово на файл)
     for m in MED_RE.finditer(block):
@@ -501,30 +501,50 @@ def check_block(lineno, block, lex, ctx, out):
                         "(EUR.1, декларація інвойсу, сертифікат); країна бренду ≠ країна виробництва"))
 
 
-def check_materials(lineno, bl, lex, out):
+def _orig(block, bl, a, b):
+    """Фрагмент у написанні автора; якщо lower() змінив довжину тексту (рідкісні символи) — у нижньому регістрі."""
+    return block[a:b] if len(block) == len(bl) else bl[a:b]
+
+
+def _word(shown, clause, m):
+    """Збіг токена (початок слова), дочитаний до кінця слова: «екошкір» → «екошкіра»."""
+    end = m.end() + len(re.match(r"\w{0,20}", clause[m.end():]).group(0))
+    return shown[m.start():end]
+
+
+def _nearest(rx, clause, m):
+    """Збіг rx у реченні, найближчий до збігу m (назва плити поруч із заявою, а не перша в реченні)."""
+    hits = list(rx.finditer(clause))
+    return min(hits, key=lambda h: min(abs(h.start() - m.end()), abs(m.start() - h.end()))) if hits else None
+
+
+def check_materials(lineno, block, bl, lex, out):
     """Заяви про матеріал, що суперечать матеріалу в тому ж реченні (частині тексту до . ; ! ? | або кінця рядка)."""
     done = set()
     pos = 0
     for clause in CLAUSE_SPLIT_RE.split(bl):
         start, pos = pos, pos + len(clause) + 1
+        shown = _orig(block, bl, start, start + len(clause))
         if "MAT_SOLID_WOOD" not in done and lex.board_re and lex.wood_claim_re:
             claim = lex.wood_claim_re.search(clause)
-            board = claim and lex.board_re.search(clause)
+            board = claim and _nearest(lex.board_re, clause, claim)
             if board and not (lex.wood_re and lex.wood_re.search(clause)):
                 done.add("MAT_SOLID_WOOD")
                 out.append(_sev(
                     "ERROR", "MAT_SOLID_WOOD", lineno,
                     "«%s» поруч із плитою «%s» без породи деревини: «%s» — ДСП/МДФ/ДВП не є масивом; назвіть породу "
-                    "для дерев'яних частин або приберіть заяву" % (claim.group(0), board.group(0), snip(clause, 60))))
+                    "для дерев'яних частин або приберіть заяву" % (
+                        _word(shown, clause, claim), _word(shown, clause, board), snip(shown, 60))))
         if "MAT_LEATHER" not in done and lex.fake_leather_re and lex.leather_claim_re:
             claim = lex.leather_claim_re.search(clause)
-            fake = claim and lex.fake_leather_re.search(clause)
+            fake = claim and _nearest(lex.fake_leather_re, clause, claim)
             if fake and not (lex.combo_re and lex.combo_re.search(clause)):
                 done.add("MAT_LEATHER")
                 out.append(_sev(
                     "ERROR", "MAT_LEATHER", lineno,
                     "«%s» в одному описі з «%s»: «%s» — уточніть, які частини з якого матеріалу (сидіння — шкіра, "
-                    "боковини — екошкіра) або приберіть заяву" % (claim.group(0), fake.group(0), snip(clause, 60))))
+                    "боковини — екошкіра) або приберіть заяву" % (
+                        _word(shown, clause, claim), _word(shown, clause, fake), snip(shown, 60))))
 
 
 def _num(s):
@@ -627,7 +647,7 @@ def check_specs(lineno, bl, lex, out):
                          "висота «%s»" % it.get("key", "?"), "см", it.get("note"), out)
 
 
-def check_dimensions(lineno, bl, lex, out):
+def check_dimensions(lineno, block, bl, lex, out):
     """Габарити в см, що фізично неможливі для меблів, — майже завжди міліметри з підписом «см»."""
     limit = lex.max_cm()
     if not limit:
@@ -652,7 +672,7 @@ def check_dimensions(lineno, bl, lex, out):
         m = hits[0]
         out.append(_sev("ERROR", "DIM_UNIT", lineno,
                         "габарит понад %g см: «%s» — схоже на міліметри; вкажіть розміри в см (Ш×Г×В) або змініть одиницю"
-                        % (limit, snip(bl[m.start():m.end()], 40))))
+                        % (limit, snip(_orig(block, bl, m.start(), m.end()), 40))))
 
 
 def _keyword_near_number(rx, text, limit=50):
