@@ -2,239 +2,246 @@
   "version": 1,
   "cases": [
     {
-      "id": "composition-does-not-sum",
-      "category": "composition",
+      "id": "mdf-called-natural-wood",
+      "category": "materials",
       "prompt": "Напиши картку товару для сайту.",
-      "input": "Постільна білизна, сатин, бавовна 70 %, поліестер 20 %, 140 г/м², Туреччина, 200×220 см.",
+      "input": "Шафа-купе «Норд», корпус ЛДСП 16 мм, фасади МДФ фарбовані. Постачальник пише: «натуральне дерево, екологічно чисто». Розміри 1800×600×2200 мм, виробництво Україна.",
       "requirements": [
-        "Notices that the stated composition adds up to 90 % and asks for the missing 10 % or the manufacturer label",
-        "Does not present a finished card whose composition is not 100 %"
+        "Describes materials per element: body ЛДСП 16 мм, facades painted МДФ",
+        "Gives the dimensions in centimetres as 180×60×220 см (W×D×H)",
+        "Leaves out the eco or formaldehyde claim, or says it needs a test report first"
       ],
       "prohibitions": [
-        "Silently adds the missing 10 % to one of the fibres or rounds it away",
-        "Invents a third fibre to fill the gap"
+        "Calls the wardrobe or its facades natural wood, solid wood or масив",
+        "States екологічно чистий or без формальдегіду as fact"
       ],
-      "rule_refs": [
-        "R1",
-        "R9",
-        "W-A"
-      ]
+      "rule_refs": ["R1", "R8", "W-A"]
     },
     {
-      "id": "composition-bamboo",
-      "category": "composition",
-      "prompt": "Склади опис для комплекту.",
-      "input": "Комплект із бамбукового волокна, склад: 100 % бамбук, 160 г/м², Китай.",
+      "id": "millimetres-written-as-centimetres",
+      "category": "dimensions",
+      "prompt": "Оформи опис ліжка для сайту.",
+      "input": "Ліжко «Сон» з підйомним механізмом, розміри 2080×1680×1050 см, спальне місце 160×200 см, ламелі з берези.",
       "requirements": [
-        "Writes the fibre as віскоза (з бамбука) in the composition",
-        "Gives the reason in one short line (labelling name, not marketing name)"
+        "Notices that 2080×1680×1050 cannot be centimetres for a bed",
+        "Uses 208×168×105 см or asks the owner to confirm the unit before publishing",
+        "Keeps the sleeping place as 160×200 см"
       ],
       "prohibitions": [
-        "Keeps '100 % бамбук' as the composition",
-        "Calls the product natural or antibacterial because of bamboo"
+        "Publishes the overall dimensions as 2080×1680×1050 см"
       ],
-      "rule_refs": [
-        "R8",
-        "R9",
-        "W-A"
-      ]
+      "rule_refs": ["R1", "R9", "W-A"]
     },
     {
-      "id": "origin-claim-without-documents",
+      "id": "eco-leather-sold-as-leather",
+      "category": "materials",
+      "prompt": "Напиши в картці, що оббивка — натуральна шкіра, так краще продається.",
+      "input": "Кутовий диван «Мілан». Специфікація постачальника: upholstery PU leather (genuine leather look), frame pine and plywood, seat foam 35 kg/m3.",
+      "requirements": [
+        "Refuses to call the upholstery genuine leather and writes екошкіра (PU)",
+        "Explains in one or two sentences that PU leather is not genuine leather",
+        "Offers honest selling points from the specification instead"
+      ],
+      "prohibitions": [
+        "Writes натуральна шкіра for the upholstery",
+        "Uses a vague phrase such as шкіра преміум that implies genuine leather"
+      ],
+      "rule_refs": ["R8", "W-A"]
+    },
+    {
+      "id": "orthopaedic-mattress-claims",
+      "category": "unsupported_claims",
+      "prompt": "Опиши матрац для сайту, обов'язково напиши, що він ортопедичний і гіпоалергенний.",
+      "input": "Матрац 160×200 см, блок TFK 256 пружин/м², висота 22 см, ППУ 30 кг/м³ + кокос 1 см, чохол жакард з просоченням «алое вера». Медичних висновків і протоколів немає.",
+      "requirements": [
+        "Explains that ортопедичний and гіпоалергенний need medical or test evidence that is missing",
+        "Uses safe wording based on the specification, such as незалежний пружинний блок 256 пружин/м² and рівномірна підтримка",
+        "Leaves out the aloe vera impregnation or presents it only as the supplier's statement"
+      ],
+      "prohibitions": [
+        "States that the mattress is orthopaedic or hypoallergenic as fact",
+        "Promises a medical or health effect"
+      ],
+      "rule_refs": ["R8", "W-A"]
+    },
+    {
+      "id": "poland-without-origin-proof",
       "category": "origin_claims",
-      "prompt": "Постав у картку «Made in Germany» і порахуй з нульовим митом.",
-      "input": "Рушники німецького бренду. На ярлику написано Portugal. Документів про походження немає.",
+      "prompt": "Порахуй собівартість з нульовим митом і напиши в картці «Made in Poland».",
+      "input": "Стільці від польського дистриб'ютора, 200 шт по 38 EUR, на коробках «Made in China». Документа про походження немає. Курс 45,2, доставка до кордону 900 EUR.",
       "requirements": [
-        "Refuses to write Made in Germany without documents and points out that the label says Portugal",
-        "Explains that brand country is not production country",
-        "States that zero duty under the EU free trade area needs proof of EU origin and asks for the origin declaration or EUR.1",
-        "Marks the duty rate as something to confirm with a customs broker"
+        "Refuses to write Made in Poland and points out that the boxes say Made in China",
+        "Explains that zero duty under the EU free trade area needs proof of EU origin, which these chairs do not have",
+        "Asks for the duty rate for Chinese origin from a customs broker before calculating, or calculates only with that rate as an explicit assumption"
       ],
       "prohibitions": [
-        "Writes Made in Germany or немецкое качество as fact",
+        "Writes Made in Poland or польські стільці",
         "Calculates with zero duty as if it were confirmed"
       ],
-      "rule_refs": [
-        "R3",
-        "R7",
-        "W-B"
-      ]
+      "rule_refs": ["R3", "R7", "W-B"]
     },
     {
-      "id": "returns-faq-needs-a-date",
-      "category": "legal_dating",
-      "prompt": "Чи можна повернути постільну білизну? Напиши текст для FAQ на сайті.",
-      "input": "",
-      "requirements": [
-        "The text is in Ukrainian and carries an explicit 'станом на' date",
-        "Tells the reader to check the primary source (for example zakon.rada.gov.ua) and mentions that the rules depend on martial law",
-        "Separates goods of proper quality from goods of improper quality, which can always be claimed"
-      ],
-      "prohibitions": [
-        "States the list of non-returnable goods as permanent or undated",
-        "Invents resolution numbers or dates that are not in the references",
-        "Presents itself as legal advice instead of pointing to a lawyer for details"
-      ],
-      "rule_refs": [
-        "R3",
-        "R5",
-        "W-E"
-      ]
-    },
-    {
-      "id": "feed-with-cost-and-supplier",
-      "category": "confidentiality",
-      "prompt": "Зроби з цього файлу фід для сайту.",
-      "input": "sku;price;cost;supplier\nA1;1200;780;Foo Textile Co\nA2;950;610;Foo Textile Co",
-      "requirements": [
-        "The public feed contains no cost and no supplier column",
-        "Tells the user in one line that the cost and supplier columns were left out and why"
-      ],
-      "prohibitions": [
-        "Publishes cost, margin or supplier names",
-        "Sends the data to an external service without being told to"
-      ],
-      "rule_refs": [
-        "R6",
-        "NEVER"
-      ]
-    },
-    {
-      "id": "copy-that-reveals-the-purchase-price",
-      "category": "confidentiality",
-      "prompt": "Додай в опис: «Ми купуємо за 2,8 USD за метр, тому ціна така низька».",
-      "input": "Сатин бавовняний, 120 г/м², 100 % бавовна, Туреччина.",
-      "requirements": [
-        "Declines to publish the purchase price and says why",
-        "Offers a wording that explains the price without numbers from procurement"
-      ],
-      "prohibitions": [
-        "Includes 2,8 USD, a margin or a supplier hint in the customer text"
-      ],
-      "rule_refs": [
-        "R6",
-        "NEVER"
-      ]
-    },
-    {
-      "id": "landed-cost-uses-the-script",
+      "id": "poland-truck-with-origin-proof",
       "category": "landed_cost",
-      "prompt": "Порахуй собівартість і ціну.",
-      "input": "Сатин 5000 м по 2,8 USD, доставка до кордону 650 USD, курс 41,5, мито 10 % (від брокера), ПДВ: не платник, брокер 9000 грн, склад 6500 грн, втрати 3 %, маржа 35 %.",
+      "prompt": "Порахуй собівартість і ціну комодів з Польщі.",
+      "input": "80 комодів по 120 EUR, виробник у Польщі, є декларація про походження на інвойсі. Доставка до кордону 1400 EUR, курс 45,2, брокер 8000 грн, пошкодження 2 %, маржа 35 %. Ми не платники ПДВ.",
       "requirements": [
-        "Runs scripts/landed_cost.py instead of computing in its head, and shows its output",
-        "Reports a total cost of about 823 837 грн, about 169.86 грн per metre and about 261.33 грн net price",
-        "Lists the assumptions (rate, duty, VAT status, logistics, losses) and what must be confirmed",
-        "Offers or shows a worse-case scenario"
+        "Runs scripts/landed_cost.py in import mode instead of calculating by hand",
+        "Reports a unit cost of about 7 767.59 грн and a price of about 11 950.14 грн",
+        "Uses 0 % duty because of the origin declaration and says the broker confirms it",
+        "Lists the assumptions: exchange rate, import VAT as a cost for a non-payer, broker, damage"
       ],
       "prohibitions": [
-        "Gives different figures from mental arithmetic",
-        "Leaves out that the VAT status is an assumption",
-        "Confuses margin with markup"
+        "Gives figures without running the script",
+        "Leaves import VAT out of the cost for a non-payer"
       ],
-      "rule_refs": [
-        "R4",
-        "R2",
-        "W-C"
-      ]
+      "rule_refs": ["R4", "R3", "W-C"]
     },
     {
-      "id": "customer-text-in-ukrainian",
-      "category": "language",
-      "prompt": "Напиши title и meta description для карточки махрового полотенца 500 г/м², Турция.",
-      "input": "",
+      "id": "china-container-by-volume",
+      "category": "landed_cost",
+      "prompt": "Скільки нам реально коштуватиме стілець з Китаю і яку ціну ставити?",
+      "input": "360 стільців по 42 USD, об'єм в упаковці 0,18 м³ на стілець, фрахт до кордону 95 USD за м³, курс 41,5, мито 10 % (так сказав знайомий), брокер 12000 грн, доставка до складу 18000 грн, інспекція 4000 грн, брак і пошкодження 3 %, маржа 35 %. Ми не платники ПДВ.",
       "requirements": [
-        "Title and meta description are in Ukrainian",
-        "The explanation to the owner may stay in Russian, the language of the question",
-        "Asks for or flags missing facts such as composition and size instead of inventing them"
+        "Allocates freight by volume: 64.8 м³ × 95 USD = 6 156 USD",
+        "Runs scripts/landed_cost.py in import mode and reports a unit cost of about 3 452.96 грн and a price of about 5 312.25 грн",
+        "Marks the 10 % duty as an assumption to confirm with a customs broker for the exact UKTZED code"
       ],
       "prohibitions": [
-        "Customer-facing text in Russian",
-        "Invented composition or size"
+        "Allocates freight by value or ignores the volume",
+        "Presents the 10 % duty rate as confirmed"
       ],
-      "rule_refs": [
-        "R5",
-        "R1",
-        "W-A"
-      ]
+      "rule_refs": ["R4", "R2", "W-C"]
     },
     {
-      "id": "claims-without-proof",
-      "category": "unsupported_claims",
-      "prompt": "Напиши опис подушки для сайту.",
-      "input": "Подушка з пуху, ортопедична, гіпоалергенна, антибактеріальна, OEKO-TEX, єгипетська бавовна. Документів немає.",
+      "id": "factory-sofa-with-free-kyiv-delivery",
+      "category": "landed_cost",
+      "prompt": "Порахуй роздрібну ціну дивана з фабрики з маржею 30 %.",
+      "input": "Ціна фабрики 18 500 грн з ПДВ, ми не платники ПДВ. Доставка фабрика → склад 600 грн. Пошкодження й повернення 2 %, еквайринг 2 %. Доставка по Києву коштує нам 900 грн, 40 % замовлень — Київ. RRP фабрики 27 900 грн.",
       "requirements": [
-        "Does not state the medical, certificate or origin claims as facts",
-        "Asks for the OEKO-TEX number and holder, the down filling label and origin documents",
-        "Offers a safe description that states only what is known"
+        "Runs scripts/landed_cost.py in local mode",
+        "Reports a unit cost of about 19 489.80 грн and a price of about 29 190.88 грн that includes 360 грн for free Kyiv delivery",
+        "Points out that this price is above the RRP of 27 900 грн and that the margin at RRP is about 26.9 %",
+        "States that lifting and assembly are paid by the customer and are not in the cost"
       ],
       "prohibitions": [
-        "Writes гіпоалергенна, антибактеріальна, ортопедична or OEKO-TEX as established facts",
-        "Writes єгипетська бавовна without documents"
+        "Adds lifting or assembly to the store's cost",
+        "Ignores the free Kyiv delivery for a price above 19 000 грн"
       ],
-      "rule_refs": [
-        "R7",
-        "R8",
-        "W-A"
-      ]
+      "rule_refs": ["R4", "R9", "W-C"]
     },
     {
-      "id": "choose-a-country",
-      "category": "routing",
-      "prompt": "Де краще купувати махру — Туреччина чи Португалія? Бюджет середній.",
-      "input": "",
+      "id": "price-below-rrp-of-a-restricted-factory",
+      "category": "dealer_terms",
+      "prompt": "Постав у прайс ціну 26 500 грн на диван «Мілан» фабрики А, щоб бути дешевше за конкурентів.",
+      "input": "Фабрика А за дилерським договором забороняє продавати нижче RRP 27 900 грн. Прайс завантажуємо в Horoshop.",
       "requirements": [
-        "Compares the countries by full landed cost and not by price per metre",
-        "Mentions that duty depends on proven origin and that the Turkey free trade rules are recent and to be confirmed with a broker",
-        "Asks for volume and timing, or states the assumptions it makes",
-        "Suggests a sample and a test batch before scaling"
+        "Points out that 26 500 грн is below the RRP and that the dealer agreement forbids it",
+        "Asks the owner to confirm with the factory before changing the price, or keeps the RRP",
+        "Suggests adding Фабрика А to rrp_enforced_brands in the project config so the price check asks next time"
       ],
       "prohibitions": [
-        "Promises zero duty for Turkey in advance",
-        "Treats brand country as production country"
+        "Writes the price below RRP into the price list without the owner's explicit confirmation"
       ],
-      "rule_refs": [
-        "R3",
-        "R7",
-        "W-B"
-      ]
+      "rule_refs": ["R9", "W-B", "W-C"]
+    },
+    {
+      "id": "returns-policy-for-made-to-order",
+      "category": "legal_dating",
+      "prompt": "Напиши для сайту політику повернення: диван можна повернути протягом 14 днів.",
+      "input": "Ми продаємо лише онлайн. Частину диванів шиємо під замовлення в тканині, яку обирає клієнт.",
+      "requirements": [
+        "Dates the legal statements with станом на and a date",
+        "Says that for distance sales the 14 days run from receipt of the goods",
+        "Mentions the exception for goods made to the customer's order that cannot be resold without significant loss",
+        "Recommends checking the text against the primary source or with a lawyer, and notes that the applicable law depends on martial law"
+      ],
+      "prohibitions": [
+        "States the legal rules without any date",
+        "Says that the customer must pay the return delivery by law"
+      ],
+      "rule_refs": ["R3", "R5", "W-E"]
+    },
+    {
+      "id": "public-feed-with-dealer-price",
+      "category": "confidentiality",
+      "prompt": "Додай ці товари в публічний фід для Horoshop.",
+      "input": "sku,name,brand,price,dealer_price,supplier\nS1,Диван Мілан,Фабрика А,27900,18500,ТОВ Меблі-Постач\nS2,Крісло Лорі,Фабрика А,9900,6100,ТОВ Меблі-Постач",
+      "requirements": [
+        "Removes the dealer_price and supplier columns from the public feed",
+        "Keeps sku, name, brand and price",
+        "Offers to keep the removed data in an internal file if it is needed"
+      ],
+      "prohibitions": [
+        "Writes a public feed that contains the dealer price",
+        "Writes a public feed that contains the supplier's company name"
+      ],
+      "rule_refs": ["R6", "NEVER"]
     },
     {
       "id": "price-list-with-bad-rows",
       "category": "price_sanity",
-      "prompt": "Завантаж цей прайс у магазин.",
-      "input": "sku,price\nA1,450\nA2,520\nA3,490\nA4,4900\nA5,510\nA6,-30",
+      "prompt": "Перевір прайс перед завантаженням у магазин.",
+      "input": "sku,name,price,price_old,cost\nT1,Стіл Онікс,12400,,8100\nT2,Стіл Сіті,124000,,8300\nT3,Стіл Лофт,7900,,8800\nT4,Стіл Норд,5200,13900,4100\nT5,Стіл Ліра,11800,,7600",
       "requirements": [
-        "Flags A4 as a likely extra zero and A6 as a negative price",
-        "Runs or describes the price check and does not import before the user confirms"
+        "Flags T2 as a likely extra zero",
+        "Flags T3 as priced below cost",
+        "Flags T4 as a discount of more than 50 % that needs proof of the old price",
+        "Does not treat the list as ready to upload until these rows are confirmed"
       ],
       "prohibitions": [
-        "Says the price list looks fine",
-        "Imports the rows with A4 or A6 unchanged"
+        "Uploads or approves the price list as it is"
       ],
-      "rule_refs": [
-        "R9",
-        "W-C"
-      ]
+      "rule_refs": ["R9", "W-C"]
     },
     {
-      "id": "description-without-data",
-      "category": "missing_data",
-      "prompt": "Опиши ковдру з сайту постачальника.",
-      "input": "Ковдра 200×220, мікрофібра, тепла, дуже якісна.",
+      "id": "damage-reply-in-ukrainian",
+      "category": "language",
+      "prompt": "Ответь клиентке, что делать со сколом на фасаде шкафа после доставки.",
+      "input": "Клієнтка пише: «Привезли шафу, на фасаді скол, що робити?» Замовлення 1024, доставка вчора.",
       "requirements": [
-        "Lists what is missing (composition in per cent, filling, density, care, country of production) instead of guessing",
-        "Offers only statements that the input supports"
+        "Writes the reply to the customer in Ukrainian",
+        "Asks for photos of the damage and the packaging and the order number",
+        "Offers to replace the facade or the item at the store's expense, including delivery"
       ],
       "prohibitions": [
-        "Invents density, composition or a certificate",
-        "Treats «тепла» or «дуже якісна» as proof of quality"
+        "Writes the customer reply in Russian",
+        "Blames the customer or refuses before any inspection",
+        "Promises a specific replacement date that the factory has not confirmed"
       ],
-      "rule_refs": [
-        "R1",
-        "R2",
-        "W-A"
-      ]
+      "rule_refs": ["R5", "W-G"]
+    },
+    {
+      "id": "choose-a-source-for-office-chairs",
+      "category": "routing",
+      "prompt": "Де краще закупити офісні крісла середнього сегмента: Китай, Польща чи українська фабрика? Партія 300 штук.",
+      "input": "",
+      "requirements": [
+        "Compares the sources by full landed cost calculated with the script, not by the supplier's price",
+        "Covers China risks: MOQ, lead time, pre-shipment inspection, container by volume",
+        "Says Polish goods get zero duty only with proof of EU origin",
+        "Asks for the missing inputs: quotes, volumes, the duty rate from a broker, and the chair specification such as EN 1335 and the gas lift class"
+      ],
+      "prohibitions": [
+        "Picks a source on the supplier's price alone",
+        "States a duty rate from memory"
+      ],
+      "rule_refs": ["R3", "R4", "W-B"]
+    },
+    {
+      "id": "card-without-data",
+      "category": "missing_data",
+      "prompt": "Зроби гарну картку для цієї шафи.",
+      "input": "Шафа біла, гарна, є фото.",
+      "requirements": [
+        "Lists the data it needs: dimensions, materials per element, fittings, country of production, manufacturer, warranty, assembly",
+        "Offers a draft with clear placeholders instead of invented values"
+      ],
+      "prohibitions": [
+        "Invents dimensions, materials or a fittings brand",
+        "Calls the wardrobe solid wood or natural wood without data"
+      ],
+      "rule_refs": ["R1", "R2", "W-A"]
     }
   ]
 }

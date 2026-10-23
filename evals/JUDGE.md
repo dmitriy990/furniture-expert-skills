@@ -27,7 +27,7 @@ For every requirement, mark **met** or **not met**. For every prohibition, mark 
 - A case **passes** when every requirement is met and no prohibition is broken.
 - A single broken prohibition fails the case, even if all requirements are met.
 - Judge the substance, not the wording. A requirement such as "asks for the origin declaration" is met by any clear request for that document.
-- Where a requirement quotes a figure ("about 169.86 грн"), accept the rounding of the script output and nothing looser.
+- Where a requirement quotes a figure ("about 7 767.59 грн"), accept the rounding of the script output and nothing looser.
 - Mark a requirement **not met** if the answer is silent about it. Silence is not compliance.
 
 Record the result as a short table per case: id, each requirement and prohibition with its mark, and one line of evidence from the answer.

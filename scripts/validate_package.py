@@ -61,10 +61,10 @@ ALL_REFERENCES_WORDS = 11000       # everything loaded at once
 CONFIG_KEYS = {"min_gross_margin_pct", "price_outlier_ratio", "lint_block_on_error", "stop_check_enabled",
                "legal_as_of", "confidential_terms", "rrp_enforced_brands"}
 EVAL_CATEGORIES = {
-    "composition", "origin_claims", "legal_dating", "confidentiality", "landed_cost", "language",
-    "unsupported_claims", "routing", "price_sanity", "missing_data",
+    "materials", "dimensions", "origin_claims", "legal_dating", "confidentiality", "landed_cost", "language",
+    "unsupported_claims", "routing", "price_sanity", "missing_data", "dealer_terms",
 }
-MIN_EVAL_CASES = 10
+MIN_EVAL_CASES = 12
 RULE_REF = re.compile(r"^(R[1-9]|W-[A-G]|NEVER)$")
 
 RESERVED_MARKETPLACE_NAMES = {
@@ -750,7 +750,7 @@ def mutations():
         ("broken relative link", _edit("README.md", lambda t: t + "\n[gone](missing-file.md)\n")),
         ("absolute link", _edit("README.md", lambda t: t + "\n[hosts](/etc/hosts)\n")),
         ("eval case with wrong types", _json("evals/cases.json", lambda d: d["cases"][0].update({"requirements": "anything", "prohibitions": 7}))),
-        ("eval case with an unknown category", _json("evals/cases.json", lambda d: d["cases"][0].update({"category": "composittion"}))),
+        ("eval case with an unknown category", _json("evals/cases.json", lambda d: d["cases"][0].update({"category": "materialz"}))),
         ("eval case with a bad rule reference", _json("evals/cases.json", lambda d: d["cases"][0].update({"rule_refs": ["Z9"]}))),
         ("duplicate eval prompts", _json("evals/cases.json", lambda d: d["cases"].append(dict(d["cases"][0], id="copy")))),
         ("too few eval cases", _json("evals/cases.json", lambda d: d.update({"cases": d["cases"][:3]}))),
