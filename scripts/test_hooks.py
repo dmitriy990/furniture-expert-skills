@@ -641,7 +641,7 @@ class PriceGuard(Sandbox):
 
 # =================================================================== stop_check
 
-FILLER = "Бязь і сатин — популярні тканини для постільної білизни, рушників та штор. "
+FILLER = "Дивани, шафи й матраци — основні категорії меблевого магазину: оббивка, фасади, фурнітура. "
 LEGAL = "Мито, ПДВ, УКТЗЕД, закон про повернення, маркування та декларація. "
 
 
@@ -656,7 +656,7 @@ class StopCheck(Sandbox):
     def test_short_answers_are_not_checked(self):
         self.assertIsNone(self.stop(LEGAL))
 
-    def test_non_textile_answers_are_not_checked(self):
+    def test_non_furniture_answers_are_not_checked(self):
         self.assertIsNone(self.stop("Мито, ПДВ, УКТЗЕД, закон, маркування, декларація. " * 8))
 
     def test_legal_topics_without_date_block(self):
@@ -675,7 +675,7 @@ class StopCheck(Sandbox):
         self.assertIsNone(self.stop(FILLER * 5 + "Мито і ПДВ залежать від коду."))
 
     def test_cost_without_assumptions_blocks(self):
-        d = self.stop(FILLER * 4 + "Розрахунок собівартості: 150 грн за метр, ціна 260 грн.")
+        d = self.stop(FILLER * 4 + "Розрахунок собівартості: 18 500 грн за диван, ціна 27 900 грн.")
         self.assertEqual(d["decision"], "block")
         self.assertIn("розрахунок собівартості", d["reason"])
         self.assertNotIn("правові/митні/податкові", d["reason"])
@@ -683,6 +683,14 @@ class StopCheck(Sandbox):
     def test_cost_with_assumptions_passes(self):
         msg = FILLER * 4 + "Розрахунок собівартості: 150 грн. Допущення: курс 41,5, логістика 6500 грн."
         self.assertIsNone(self.stop(msg))
+
+    def test_furniture_assumption_words_count(self):
+        msg = FILLER * 4 + "Розрахунок собівартості: 18 500 грн. Допущення: кубатура 0,18 м³, пошкодження 2 %."
+        self.assertIsNone(self.stop(msg))
+
+    def test_warranty_and_distance_selling_are_legal_topics(self):
+        d = self.stop(FILLER * 4 + "Гарантія 18 місяців, дистанційна торгівля, повернення протягом 14 днів.")
+        self.assertEqual(d["decision"], "block")
 
     def test_both_problems_in_one_reason(self):
         legal_without_assumption_words = "Закон про повернення, маркування, сертифікація та декларація. "
