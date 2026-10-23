@@ -1,7 +1,7 @@
 {
   "name": "furniture-expert",
   "version": "1.0.0",
-  "description": "Textile and textile-business expert for Ukrainian online stores: fabrics, suppliers, landed cost, QC, legal notes, content and SEO.",
+  "description": "Furniture and furniture-retail expert for Ukrainian online stores: materials, upholstery and mattresses, dealer terms and RRP, landed cost, QC, legal notes, content and SEO.",
   "author": {
     "name": "IvaTech"
   },
@@ -9,11 +9,13 @@
   "repository": "https://github.com/dmitriy990/furniture-expert-skills",
   "license": "MIT",
   "keywords": [
-    "textile",
+    "furniture",
     "ecommerce",
     "ukraine",
     "import",
     "landed-cost",
-    "seo"
+    "seo",
+    "mattresses",
+    "rrp"
   ]
 }

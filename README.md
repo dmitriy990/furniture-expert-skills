@@ -1,6 +1,6 @@
 # Furniture Expert
 
-`furniture-expert` is an Agent Skill for running an online textile store in Ukraine that imports from Turkey, Italy, China, Germany and Portugal. It works like a technologist and a commercial director in one: fabrics, fibres and densities, choosing and checking suppliers, landed cost and price, quality control and certificates, product cards and SEO in Ukrainian, labelling, returns and import rules. It insists on measurable facts, dates every legal statement, keeps procurement data out of public text, and calculates prices with a script instead of in its head. To install it in Claude Code:
+`furniture-expert` is an Agent Skill for running an online furniture store in Ukraine that resells Ukrainian factories, from stock or by dropship, and imports some lines from Poland and China. It works like a furniture technologist and a commercial director in one: boards, solid wood and veneer, fittings, upholstery and mattresses, dealer terms and recommended retail prices, landed cost and price, quality control and claims, product cards and SEO in Ukrainian, returns, warranty and import rules. It insists on dimensions and materials per element, dates every legal statement, keeps procurement data out of public text, and calculates prices with a script instead of in its head. To install it in Claude Code:
 
 ```bash
 claude plugin marketplace add dmitriy990/furniture-expert-skills
@@ -10,21 +10,21 @@ claude plugin marketplace add dmitriy990/furniture-expert-skills
 claude plugin install furniture-expert@ivatech-furniture
 ```
 
-Then ask in plain language. Claude loads the skill when the task is about textiles, and you can also invoke it by name:
+Then ask in plain language. Claude loads the skill when the task is about furniture, and you can also invoke it by name:
 
 ```txt
-Write a product card for this sateen bedding set: 70 % cotton, 20 % polyester, 140 g/m², made in Turkey
-Calculate landed cost and price: 5,000 m at 2.8 USD, freight 650 USD, rate 41.5, duty 10 %, margin 35 %
-Which is better for mid-range terry towels, Turkey or Portugal?
+Write a product card for this corner sofa: pine and plywood frame, foam 35 kg/m³, velour 50,000 Martindale, 280×180×90 cm
+Price a factory sofa: 18,500 UAH with VAT, we are not a VAT payer, 30 % margin, RRP 27,900 UAH
+What will 360 chairs from China really cost us at 0.18 m³ each and 95 USD per m³?
 Check this price list before I upload it to the shop
 ```
 
 | Task | What the skill does |
 |---|---|
-| **Product cards and feeds** | Ukrainian cards from a template, composition that adds up to 100 %, densities checked against the fabric type, no unproven claims |
-| **Suppliers and countries** | Country heuristics, supplier checklist, origin rules for duty, brand country is not production country |
-| **Cost and price** | Runs `scripts/landed_cost.py`, shows the assumptions, margin is not markup, a worse-case scenario |
-| **Quality control** | Acceptance protocol, test methods, how to verify certificates, claims handling |
+| **Product cards and feeds** | Ukrainian cards from a template, dimensions W×D×H in cm, materials per element, no "natural wood" for MDF, no "genuine leather" for eco-leather, no unproven claims |
+| **Suppliers and channels** | Ukrainian factories and dealer terms, stock versus dropship, Poland and the EU origin trap, China MOQ, lead times and inspection |
+| **Cost and price** | Runs `scripts/landed_cost.py` for factory resale or imports, freight per m³, fees, free Kyiv delivery from 19,000 UAH, the gap to RRP, a worse-case scenario |
+| **Quality control** | Acceptance with a test assembly, transport damage, EN standards as a guide, how to verify certificates and emission classes, claims |
 | **Legal and customs notes** | Short answers dated "станом на …" with a pointer to the primary source |
 | **Assortment and customers** | Reorder points, test batches, replies to customers in Ukrainian |
 
@@ -38,11 +38,11 @@ In Claude Code the skill registers three small hooks when it is invoked, and the
 
 | Hook | When | What it checks |
 |---|---|---|
-| `lint_content` | after a file is written | composition adds up to 100 %, "bamboo" written as viscose, density fits the fabric, risky washing temperatures, unproven claims, purchase prices and supplier names in public text |
-| `price_guard` | before a price file or a shop import is written | negative price, price below cost, margin under the threshold, a "discount" of 50 % or more, outliers such as an extra zero |
+| `lint_content` | after a file is written | board called solid wood, eco-leather called genuine leather, millimetres written as centimetres, foam density, board thickness, Martindale, springs per m² and mattress height against typical ranges, unproven and origin claims, dealer prices and supplier names in public text, Russian words in Ukrainian text |
+| `price_guard` | before a price file or a shop import is written | negative price, price below cost, margin under the threshold, a "discount" of 50 % or more, outliers, a price below RRP for the manufacturers you list |
 | `stop_check` | before an answer is finished | legal statements without a date and a source, cost figures without assumptions |
 
-They are local, offline and fail-open: an internal error never blocks your work. Settings go in `<your project>/.claude/furniture-expert.json`; the details, the exceptions and a one-minute check that the hooks run on your machine are in [references/hooks.md](references/hooks.md). To switch them off, run `claude plugin disable furniture-expert`.
+They are local, offline and fail-open: an internal error never blocks your work. Settings go in `<your project>/.claude/furniture-expert.json`, including `rrp_enforced_brands`, the manufacturers whose dealer agreements forbid selling below their recommended retail price. The details, the exceptions and a one-minute check that the hooks run on your machine are in [references/hooks.md](references/hooks.md). To switch them off, run `claude plugin disable furniture-expert`.
 
 Hook registration follows Claude Code's documented behaviour for skills. It has not been observed in a live session by the author, which is why that one-minute check exists. Where hooks do not run, the skill runs the same checks by hand before it gives you a result.
 
@@ -70,10 +70,11 @@ This is skill version **v1.0.0 (2026-10-23)**.
 
 ```txt
 SKILL.md                     the skill: rules, working processes, response format, hook registration
-references/                  seven reference files: fabrics, countries, QC, Ukrainian rules, pricing, content and SEO, hooks
-data/                        density ranges per fabric, fibre dictionary, hook defaults
+references/                  eight reference files: materials, upholstery and mattresses, suppliers, QC,
+                             Ukrainian rules, pricing, content and SEO, hooks
+data/                        typical ranges for furniture parameters, material dictionary, hook defaults
 hooks/                       lint_content.py, price_guard.py, stop_check.py
-scripts/landed_cost.py       the cost and price calculator
+scripts/landed_cost.py       the cost and price calculator (local resale and import)
 scripts/test_hooks.py        tests for the hooks and the calculator
 scripts/validate_package.py  required files, manifests, budgets, hook structure, links, privacy
 evals/cases.json             synthetic behavioural cases
@@ -106,7 +107,7 @@ The eval cases are not automated. [evals/JUDGE.md](evals/JUDGE.md) explains how 
 
 ## Scope and disclaimer
 
-This is a working reference for the Ukrainian market, not legal, customs or tax advice. Rules about labelling, returns, duty, VAT and origin change, and the legal notes in `references/ukraine-legal.md` are dated and cite their sources. Confirm anything that matters with a lawyer, a customs broker or an accountant, and against the primary source (zakon.rada.gov.ua, customs.gov.ua, dpss.gov.ua) before you publish it or rely on it. These notes have not been reviewed by a lawyer.
+This is a working reference for the Ukrainian market, not legal, customs or tax advice. Rules about consumer rights, returns, warranty, duty, VAT and origin change, and the legal notes in `references/ukraine-legal.md` are dated and cite their sources. Which consumer law applies depends on martial law at the time you read them. Confirm anything that matters with a lawyer, a customs broker or an accountant, and against the primary source (zakon.rada.gov.ua, customs.gov.ua, tax.gov.ua, dpss.gov.ua) before you publish it or rely on it. These notes have not been reviewed by a lawyer.
 
 ## License
 

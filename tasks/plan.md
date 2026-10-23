@@ -77,22 +77,22 @@ T17 needs every reference and hook in place, because `SKILL.md` routes to them a
       in `data/product_specs.json`. You confirm before content work starts.
 
 ### Phase 3: Knowledge (references, Russian)
-- [ ] T9: `ukraine-legal.md` from primary sources
-- [ ] T10: `materials-and-construction.md`
-- [ ] T11: `upholstery-and-mattresses.md`
-- [ ] T12: `suppliers-and-origins.md`
-- [ ] T13: `quality-control.md`
-- [ ] T14: `economics-and-pricing.md`
-- [ ] T15: `content-and-seo.md`
-- [ ] T16: `hooks.md`
+- [x] T9: `ukraine-legal.md` from primary sources
+- [x] T10: `materials-and-construction.md`
+- [x] T11: `upholstery-and-mattresses.md`
+- [x] T12: `suppliers-and-origins.md`
+- [x] T13: `quality-control.md`
+- [x] T14: `economics-and-pricing.md`
+- [x] T15: `content-and-seo.md`
+- [x] T16: `hooks.md`
 
 ### Checkpoint 4
-- [ ] Word budgets pass, all links resolve, every legal statement is dated and sourced.
+- [x] Word budgets pass, all links resolve, every legal statement is dated and sourced.
 
 ### Phase 4: Skill and packaging
-- [ ] T17: `SKILL.md` rules, workflows, routing, manual checks
-- [ ] T18: Eval cases and judge protocol
-- [ ] T19: README, README.uk.md, manifests
+- [x] T17: `SKILL.md` rules, workflows, routing, manual checks
+- [x] T18: Eval cases and judge protocol
+- [x] T19: README, README.uk.md, manifests
 
 ### Checkpoint 5: package review with you
 - [ ] Leftover grep prints nothing. Export check, self-test and tests pass. You review the package.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "ivatech-furniture",
-  "description": "Textile business expert skill for Ukrainian online stores that import fabrics and home textiles.",
+  "description": "Furniture business expert skill for Ukrainian online stores that resell local factories and import furniture.",
   "owner": {
     "name": "IvaTech"
   },
@@ -9,9 +9,9 @@
     {
       "name": "furniture-expert",
       "source": "./",
-      "description": "Textile and textile-business expert for Ukrainian online stores: fabrics, suppliers, landed cost, QC, legal notes, content and SEO.",
+      "description": "Furniture and furniture-retail expert for Ukrainian online stores: materials, upholstery and mattresses, dealer terms and RRP, landed cost, QC, legal notes, content and SEO.",
       "tags": [
-        "textile",
+        "furniture",
         "ecommerce",
         "ukraine",
         "import",

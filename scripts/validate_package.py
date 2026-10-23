@@ -694,8 +694,8 @@ def mutations():
     user_path = "/Users/" + "someone/project"
     dev_file = "SPEC.md"
     return [
-        ("unquoted description with a colon", _edit("SKILL.md", _first_line("description", "description: Use for textiles. Topics: fabrics"))),
-        ("description with unescaped inner quotes", _edit("SKILL.md", _first_line("description", 'description: "Use for "textile" work"'))),
+        ("unquoted description with a colon", _edit("SKILL.md", _first_line("description", "description: Use for furniture. Topics: sofas"))),
+        ("description with unescaped inner quotes", _edit("SKILL.md", _first_line("description", 'description: "Use for "furniture" work"'))),
         ("description over 1,024 characters", _edit("SKILL.md", _first_line("description", 'description: "' + "x" * 1100 + '"'))),
         ("tab-indented version", _edit("SKILL.md", lambda t: t.replace('  version: "', '\tversion: "', 1))),
         ("metadata key renamed", _edit("SKILL.md", lambda t: t.replace("\nmetadata:\n", "\nwrongkey:\n", 1))),
