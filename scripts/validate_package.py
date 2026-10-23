@@ -37,7 +37,7 @@ REFERENCES = [
     "origins-by-country.md", "quality-control.md", "ukraine-legal.md",
 ]
 HOOK_SCRIPTS = {"PostToolUse": "lint_content.py", "PreToolUse": "price_guard.py", "Stop": "stop_check.py"}
-DATA_FILES = ["config.json", "fibres.json", "fabric_specs.json"]
+DATA_FILES = ["config.json", "fibres.json", "product_specs.json"]
 REQUIRED_FILES = [
     "SKILL.md", "README.md", "LICENSE", ".gitignore",
     ".claude-plugin/plugin.json", ".claude-plugin/marketplace.json",
@@ -494,9 +494,25 @@ def validate(root: Path) -> list[tuple[str, bool, str]]:
     check("data/config.json has only known keys", not unknown, ", ".join(unknown))
     check("shipped confidential_terms is empty", cfg.get("confidential_terms") == [], repr(cfg.get("confidential_terms")))
     check("legal_as_of is a DD.MM.YYYY date", bool(re.fullmatch(r"[0-9]{2}\.[0-9]{2}\.[0-9]{4}", str(cfg.get("legal_as_of", "")))))
-    fabrics = data["fabric_specs.json"][0].get("fabrics", []) if isinstance(data["fabric_specs.json"][0], dict) else []
-    insane = [f.get("key", "?") for f in fabrics if not (isinstance(f.get("gsm"), list) and len(f["gsm"]) == 2 and 0 < f["gsm"][0] < f["gsm"][1] and f.get("aliases"))]
-    check("every fabric has aliases and a sane density range", bool(fabrics) and not insane, ", ".join(insane))
+    specs = data["product_specs.json"][0] if isinstance(data["product_specs.json"][0], dict) else {}
+
+    def sane(r):
+        return (isinstance(r, list) and len(r) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in r)
+                and 0 < r[0] < r[1])
+
+    insane, items = [], 0
+    for kind in ("density", "thickness", "mattress_height"):
+        for it in (specs.get(kind) or {}).get("items", []) if isinstance(specs.get(kind), dict) else []:
+            items += 1
+            if not (isinstance(it, dict) and sane(it.get("range")) and it.get("aliases")):
+                insane.append(f"{kind}:{it.get('key', '?') if isinstance(it, dict) else '?'}")
+    for kind in ("martindale", "springs_per_m2"):
+        if not sane((specs.get(kind) or {}).get("range") if isinstance(specs.get(kind), dict) else None):
+            insane.append(kind)
+    max_cm = (specs.get("dimensions") or {}).get("max_cm") if isinstance(specs.get("dimensions"), dict) else None
+    if not (isinstance(max_cm, (int, float)) and not isinstance(max_cm, bool) and max_cm > 0):
+        insane.append("dimensions.max_cm")
+    check("every product spec has aliases and a sane range", items > 0 and not insane, ", ".join(insane))
 
     # 7. Evals -------------------------------------------------------------------------------------------------------------------------
     payload, err = load_json(root, "evals/cases.json")
@@ -701,7 +717,8 @@ def mutations():
         (".gitignore hints at development files", _edit(".gitignore", lambda t: t + "\ntasks/\n")),
         ("confidential terms shipped", _json("data/config.json", lambda d: d.update({"confidential_terms": ["Acme"]}))),
         ("unknown config key", _json("data/config.json", lambda d: d.update({"surprise": 1}))),
-        ("fabric with an inverted range", _json("data/fabric_specs.json", lambda d: d["fabrics"][0].update({"gsm": [200, 100]}))),
+        ("spec with an inverted range", _json("data/product_specs.json", lambda d: d["density"]["items"][0].update({"range": [45, 16]}))),
+        ("spec without a dimension limit", _json("data/product_specs.json", lambda d: d["dimensions"].pop("max_cm"))),
         ("data file corrupted", _write("data/fibres.json", "{not json")),
         ("plugin version not bumped", _json(".claude-plugin/plugin.json", lambda d: d.update({"version": "0.0.1"}))),
         ("plugin author with an e-mail", _json(".claude-plugin/plugin.json", lambda d: d["author"].update({"email": "a@example.com"}))),

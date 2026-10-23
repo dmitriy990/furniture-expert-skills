@@ -324,28 +324,46 @@ WASH_MAX = {  # максимальна «розумна» температура
 }
 
 
+def _sane_range(r):
+    return (isinstance(r, list) and len(r) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in r)
+            and 0 < r[0] < r[1])
+
+
 class Lexicon(object):
     def __init__(self):
         fj = _load_json(os.path.join(DATA_DIR, "fibres.json"), {}, limit=2000000)
         self.fibres = fj.get("fibres", {})
         self.codes = fj.get("codes", {})
-        fa = _load_json(os.path.join(DATA_DIR, "fabric_specs.json"), {}, limit=2000000)
-        self.fabrics = fa.get("fabrics", [])
+        sp = _load_json(os.path.join(DATA_DIR, "product_specs.json"), {}, limit=2000000)
+        self.specs = sp
         # токен -> волокно; довжини токенів для швидкої перевірки префіксів
         self._tok = {}
         for key, spec in self.fibres.items():
             for tok in spec.get("tokens", []):
                 self._tok.setdefault(tok.lower(), key)
         self._lens = sorted(set(len(t) for t in self._tok))
-        # один regex для всіх аліасів тканин (довші — першими)
-        self.alias_map = {}
-        for fab in self.fabrics:
-            for al in fab.get("aliases", []):
-                self.alias_map[al.lower()] = fab
-        self.alias_re = None
-        if self.alias_map:
-            alts = "|".join(re.escape(a) for a in sorted(self.alias_map, key=len, reverse=True))
-            self.alias_re = re.compile(r"(?<!\w)(" + alts + ")")
+        # для кожного виду параметра: аліас -> матеріал/виріб і один regex на всі аліаси (довші — першими)
+        self.kinds = {}
+        for kind in ("density", "thickness", "mattress_height"):
+            items = [it for it in (sp.get(kind) or {}).get("items", []) if _sane_range(it.get("range"))]
+            amap = {}
+            for it in items:
+                for al in it.get("aliases", []):
+                    if isinstance(al, str) and al.strip():
+                        amap.setdefault(al.lower(), it)
+            rx = None
+            if amap:
+                alts = "|".join(re.escape(a) for a in sorted(amap, key=len, reverse=True))
+                rx = re.compile(r"(?<!\w)(" + alts + ")")
+            self.kinds[kind] = (amap, rx)
+
+    def plain_range(self, kind):
+        r = (self.specs.get(kind) or {}).get("range")
+        return r if _sane_range(r) else None
+
+    def max_cm(self):
+        v = (self.specs.get("dimensions") or {}).get("max_cm")
+        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0 else None
 
     def fibre_of(self, word):
         if word.isupper() and word in self.codes:
@@ -418,17 +436,31 @@ def parse_clusters(block, lex):
 
 # ----------------------------------------------------------------------- checks
 
-GSM_RE = re.compile(
-    r"(?<![\d.,])(\d{2,3}(?:[.,]\d)?)\s{0,3}(?:г\s{0,2}/\s{0,2}м\s{0,2}[²2]|гр\s{0,2}/\s{0,2}м\s{0,2}[²2]|"
-    r"г\s{0,2}/\s{0,2}кв\.?\s{0,2}м|g\s{0,2}/\s{0,2}m\s{0,2}[²2]|gr\s{0,2}/\s{0,2}m\s{0,2}[²2]|gsm\b)", re.I)
-MOMME_RE = re.compile(r"(?<![\d.,])(\d{1,2}(?:[.,]\d)?)\s{0,3}(?:momme|момме|мом\b)", re.I)
-OZ_RE = re.compile(r"(?<![\d.,])(\d{1,2}(?:[.,]\d)?)\s{0,3}(?:oz\b|унц)", re.I)
-TC_RE = re.compile(r"(?<![\d.,])(\d{3,4})\s{0,3}(?:tc\b|thread\s{1,3}count|нитк|ниток|тс\b|tpi\b)", re.I)
+# Вимірювані параметри меблів. Усі регулярні вирази працюють по рядку в нижньому регістрі; квантифікатори обмежені.
+_NUM = r"(\d{1,4}(?:[.,]\d{1,2})?)"
+DENS_RE = re.compile(
+    r"(?<![\d.,])" + _NUM + r"\s{0,3}(?:кг\s{0,2}/\s{0,2}(?:м\s{0,2}[³3]|куб\.?\s{0,2}м)|kg\s{0,2}/\s{0,2}m\s{0,2}[³3])")
+THICK_RE = re.compile(r"(?<![\d.,])(\d{1,3}(?:[.,]\d{1,2})?)\s{0,2}(?:мм|mm)(?!\w)")
+MART_KW_RE = re.compile(r"мартінд\w{0,8}|мартинд\w{0,8}|martindale")
+MART_NUM_RE = re.compile(r"(?<![\d.,])(\d{1,3}(?:[   .,]\d{3})+|\d{1,7})(?![\d])(?:\s{0,2}(тис|тыс|k)(?!\w)\.?)?")
+SPRINGS_RE = re.compile(
+    r"(?<![\d.,])(\d{2,4})\s{0,3}(?:(?:незалежн|независим|independent|niezależn)\w{0,4}\s{1,3})?"
+    r"(?:пружин\w{0,4}|springs?|sprężyn\w{0,3}|sprezyn\w{0,3})\s{0,3}(?:/|на|per|na)\s{0,3}(?:1\s{0,2})?"
+    r"(?:м\s{0,2}[²2]|кв\.?\s{0,2}м|m\s{0,2}[²2]|sq\.?\s{0,2}m)(?!\w)")
+HEIGHT_RE = re.compile(
+    r"(?:висот\w{0,6}|высот\w{0,6}|height|wysoko\w{0,4})[^\d\n]{0,15}?(\d{1,3}(?:[.,]\d)?)\s{0,2}(?:см|cm)(?!\w)")
+_DIM = r"(\d{1,5}(?:[.,]\d{1,2})?)"
+_X = r"\s{0,2}[×xх*]\s{0,2}"
+DIMS_RE = re.compile(
+    r"(?<![\d.,])" + _DIM + _X + _DIM + r"(?:" + _X + _DIM + r")?(?![\d.,])\s{0,3}(см|cm|мм|mm|м|m)?(?!\w)")
+DIM_ONE_RE = re.compile(
+    r"(?:ширин\w{0,4}|глибин\w{0,4}|глубин\w{0,4}|висот\w{0,4}|высот\w{0,4}|довжин\w{0,4}|длин\w{0,4}|"
+    r"width|depth|height|length|szeroko\w{0,4}|głęboko\w{0,4}|wysoko\w{0,4}|długo\w{0,4})"
+    r"[^\d\n]{0,15}?(\d{1,5}(?:[.,]\d{1,2})?)\s{0,2}(?:см|cm)(?!\w)")
+UNIT_CM_RE = re.compile(r"(?<!\w)(?:см|cm)(?!\w)")
+UNIT_MM_RE = re.compile(r"(?<!\w)(?:мм|mm)(?!\w)")
 WASH_RE = re.compile(r"(?:пра\w{0,12}|стир\w{0,12}|wash\w{0,12})[^\n.;]{0,50}?(\d{2})\s{0,3}(?:°|º|˚|градус)", re.I)
 BOIL_RE = re.compile(r"кип['’ʼ]?ят|кипяч", re.I)
-FILLING_RE = re.compile(
-    r"наповнювач|наповнен|синтепон|холофайбер|силікон|\bпух|пір['’ʼ]я|ковдр|подушк|filling|batting|"
-    r"wadding|утеплювач|ватин", re.I)
 NATURAL_RE = re.compile(
     r"100\s{0,3}%\s{0,3}натурал|натуральн\w{0,8}\s{1,3}(?:тканин|склад|матеріал)|100\s{0,3}%\s{0,3}natural|"
     r"еко[- ]?(?:тканин|дружн)", re.I)
@@ -537,57 +569,8 @@ def check_block(lineno, block, lex, ctx, out):
         if BOIL_RE.search(bl) and any(k not in ("cotton", "linen", "hemp") for k in in_block):
             out.append(_sev("WARN", "BOIL", lineno, "«кип'ятіння» для суміші з нестійкими волокнами — не рекомендуйте"))
 
-    # ---- щільність
-    gsm_hits = list(GSM_RE.finditer(block))
-    oz_hits = list(OZ_RE.finditer(block))
-    momme_hits = list(MOMME_RE.finditer(block))
-    if (gsm_hits or oz_hits or momme_hits) and not FILLING_RE.search(bl):
-        found = []
-        if (gsm_hits or oz_hits) and lex.alias_re is not None:
-            for m in lex.alias_re.finditer(bl):
-                found.append((m.start(), m.end(), lex.alias_map[m.group(1)]))
-        vals = []
-
-        def pick(pos):
-            """Тканина для числа в позиції pos: у цьому ж рядку; інакше єдина у блоці; при кількох — найближча попередня."""
-            ls = bl.rfind("\n", 0, pos) + 1
-            le = bl.find("\n", pos)
-            le = len(bl) if le < 0 else le
-            cand = [f for f in found if ls <= f[0] < le] or found
-            keys = set(f[2]["key"] for f in cand)
-            if len(keys) == 1:
-                return cand[0][2]
-            prev = [f for f in cand if f[1] <= pos and pos - f[1] <= 40]
-            return max(prev, key=lambda f: f[1])[2] if prev else None
-
-        for m in gsm_hits:
-            fab = pick(m.start())
-            if fab is not None:
-                vals.append((float(m.group(1).replace(",", ".")), fab, "г/м²"))
-        for m in oz_hits:
-            fab = pick(m.start())
-            if fab is not None and fab["key"] == "деним":
-                vals.append((float(m.group(1).replace(",", ".")) * 33.906, fab, "oz/yd²→г/м²"))
-        for m in momme_hits:
-            silk = [f for f in lex.fabrics if f["key"] == "шовк"]
-            if silk:
-                vals.append((float(m.group(1).replace(",", ".")) * 4.306, silk[0], "momme→г/м²"))
-        for v, fab, unit in vals:
-            lo, hi = fab["gsm"]
-            if v < lo * 0.95 or v > hi * 1.05:
-                hard = v < lo * 0.6 or v > hi * 1.8
-                note = (" (" + fab["note"] + ")") if fab.get("note") else ""
-                out.append(_sev(
-                    "ERROR" if hard else "WARN", "GSM_RANGE", lineno,
-                    "щільність %g г/м² нетипова для «%s» (ринковий діапазон %d–%d)%s; перевірте одиниці/позицію"
-                    % (round(v), fab["key"], lo, hi, note)))
-
-    # ---- thread count
-    for m in TC_RE.finditer(block):
-        tc = int(m.group(1))
-        if tc > 800:
-            out.append(_sev("WARN", "THREAD_COUNT", lineno,
-                            "thread count %d — ймовірно, завищено (сумування шарів пряжі); для одношарової бавовни реалістично 200–600" % tc))
+    check_specs(lineno, bl, lex, out)
+    check_dimensions(lineno, bl, lex, out)
 
     # ---- заяви, що потребують доказів (одноразово на файл)
     for m in MED_RE.finditer(block):
@@ -604,6 +587,134 @@ def check_block(lineno, block, lex, ctx, out):
         ctx["seen"].add(("origin",))
         out.append(_sev("WARN", "CLAIM_ORIGIN", lineno,
                         "«єгипетська/Giza/Pima/Supima» — потрібне документальне підтвердження походження сировини"))
+
+
+def _num(s):
+    return float(s.replace(",", "."))
+
+
+def _line_bounds(bl, pos):
+    ls = bl.rfind("\n", 0, pos) + 1
+    le = bl.find("\n", pos)
+    return ls, (len(bl) if le < 0 else le)
+
+
+def _pick_near(bl, start, end, kind, lex):
+    """Матеріал для числа bl[start:end]: найближча попередня назва в тому ж рядку (≤ 40 знаків, без цифр між ними),
+    інакше назва одразу після числа з одиницею («16 мм ЛДСП»). Інакше None — без перевірки, щоб не давати хибних тривог."""
+    amap, rx = lex.kinds.get(kind, ({}, None))
+    if rx is None:
+        return None
+    ls, le = _line_bounds(bl, start)
+    best = None
+    for m in rx.finditer(bl, max(ls, start - 80), start):
+        if start - m.end() <= 40 and not re.search(r"\d", bl[m.end():start]):
+            best = m
+    if best is not None:
+        return amap.get(best.group(1))
+    j = end
+    while j < min(le, end + 4) and bl[j] in " \t(:,":
+        j += 1
+    m = rx.match(bl, j)
+    if m and m.start() < le:
+        return amap.get(m.group(1))
+    return None
+
+
+def _pick_in_line(bl, start, kind, lex):
+    """Для висоти матраца: назва виробу в тому ж рядку (єдина або найближча попередня)."""
+    amap, rx = lex.kinds.get(kind, ({}, None))
+    if rx is None:
+        return None
+    ls, le = _line_bounds(bl, start)
+    found = [(m.end(), amap.get(m.group(1))) for m in rx.finditer(bl, ls, le)]
+    found = [f for f in found if f[1] is not None]
+    if len(set(f[1]["key"] for f in found)) == 1:
+        return found[0][1]
+    prev = [f for f in found if f[0] <= start]
+    return max(prev, key=lambda f: f[0])[1] if prev else None
+
+
+def _g(v):
+    """Число для повідомлення: 1 500 000 замість 1.5e+06."""
+    return "{:,.0f}".format(v).replace(",", " ") if v == int(v) and abs(v) >= 10000 else "%g" % v
+
+
+def _range_issue(lineno, v, lo, hi, what, unit, note, out):
+    if lo * 0.95 <= v <= hi * 1.05:
+        return
+    hard = v < lo * 0.6 or v > hi * 1.8
+    out.append(_sev(
+        "ERROR" if hard else "WARN", "SPEC_RANGE", lineno,
+        "%s %s %s нетипово (ринковий діапазон %s–%s)%s; перевірте одиниці/позицію"
+        % (what, _g(v), unit, _g(lo), _g(hi), (" (" + note + ")") if note else "")))
+
+
+def check_specs(lineno, bl, lex, out):
+    """Вимірювані параметри проти діапазонів із data/product_specs.json."""
+    for m in DENS_RE.finditer(bl):
+        it = _pick_near(bl, m.start(), m.end(), "density", lex)
+        if it is not None:
+            _range_issue(lineno, _num(m.group(1)), it["range"][0], it["range"][1],
+                         "щільність «%s»" % it.get("key", "?"), "кг/м³", it.get("note"), out)
+    for m in THICK_RE.finditer(bl):
+        if re.search(r"[×xх*]\s{0,2}$", bl[max(0, m.start() - 4):m.start()]) or re.match(r"\s{0,2}[×xх*]", bl[m.end():m.end() + 3]):
+            continue  # частина габаритів «2000×900×750 мм»
+        it = _pick_near(bl, m.start(), m.end(), "thickness", lex)
+        if it is not None:
+            _range_issue(lineno, _num(m.group(1)), it["range"][0], it["range"][1],
+                         "товщина «%s»" % it.get("key", "?"), "мм", it.get("note"), out)
+    mr = lex.plain_range("martindale")
+    if mr:
+        for kw in MART_KW_RE.finditer(bl):
+            ls, le = _line_bounds(bl, kw.start())
+            a, b = max(ls, kw.start() - 40), min(le, kw.end() + 40)
+            nums = [n for n in MART_NUM_RE.finditer(bl, a, b) if n.end() <= kw.start() or n.start() >= kw.end()]
+            if not nums:
+                continue
+            n = min(nums, key=lambda n: min(abs(n.end() - kw.start()), abs(n.start() - kw.end())))
+            v = float(re.sub(r"[   .,]", "", n.group(1))) * (1000 if n.group(2) else 1)
+            if v >= 1000:
+                _range_issue(lineno, v, mr[0], mr[1], "стійкість до стирання (Мартіндейл)", "циклів",
+                             (lex.specs.get("martindale") or {}).get("note"), out)
+    sr = lex.plain_range("springs_per_m2")
+    if sr:
+        for m in SPRINGS_RE.finditer(bl):
+            _range_issue(lineno, float(m.group(1)), sr[0], sr[1], "кількість пружин", "на м²",
+                         (lex.specs.get("springs_per_m2") or {}).get("note"), out)
+    for m in HEIGHT_RE.finditer(bl):
+        it = _pick_in_line(bl, m.start(), "mattress_height", lex)
+        if it is not None:
+            _range_issue(lineno, _num(m.group(1)), it["range"][0], it["range"][1],
+                         "висота «%s»" % it.get("key", "?"), "см", it.get("note"), out)
+
+
+def check_dimensions(lineno, bl, lex, out):
+    """Габарити в см, що фізично неможливі для меблів, — майже завжди міліметри з підписом «см»."""
+    limit = lex.max_cm()
+    if not limit:
+        return
+    hits = []
+    for m in DIMS_RE.finditer(bl):
+        unit = m.group(4)
+        if not unit:
+            ls, _ = _line_bounds(bl, m.start())
+            before = bl[max(ls, m.start() - 40):m.start()]
+            cm, mm = list(UNIT_CM_RE.finditer(before)), list(UNIT_MM_RE.finditer(before))
+            if cm and (not mm or cm[-1].start() > mm[-1].start()):
+                unit = "см"
+        if unit in ("см", "cm"):
+            vals = [_num(g) for g in m.groups()[:3] if g]
+            if max(vals) > limit:
+                hits.append(m)
+    for m in DIM_ONE_RE.finditer(bl):
+        if _num(m.group(1)) > limit:
+            hits.append(m)
+    if hits:
+        m = hits[0]
+        out.append(_sev("ERROR", "DIM_UNIT", lineno,
+                        "габарит понад %g см: «%s» — схоже на міліметри; вкажіть розміри в см (Ш×Г×В) або змініть одиницю"
+                        % (limit, snip(bl[m.start():m.end()], 40))))
 
 
 def _keyword_near_number(rx, text, limit=50):

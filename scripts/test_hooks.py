@@ -130,41 +130,94 @@ class LintComposition(LintBase):
         self.assertIn(("WARN", "BAMBOO_LOOSE"), self.codes(self.card("Бамбукова тканина для літа.")))
 
 
-# =================================================================== lint_content: щільність, thread count
+# =================================================================== lint_content: параметри та габарити
 
-class LintDensity(LintBase):
-    def test_typical_density_is_clean(self):
-        self.assertEqual(self.codes(self.card("Тканина: бязь, 120 г/м².")), [])
+class LintSpecs(LintBase):
+    def test_foam_density_in_range_is_clean(self):
+        self.assertEqual(self.codes(self.card("Наповнювач: ППУ 30 кг/м³.")), [])
 
-    def test_slightly_outside_range_is_warning(self):
-        self.assertEqual(self.codes(self.card("Тканина: бязь, 185 г/м².")), [("WARN", "GSM_RANGE")])
+    def test_foam_density_slightly_outside_is_warning(self):
+        self.assertEqual(self.codes(self.card("Наповнювач: ППУ 50 кг/м³.")), [("WARN", "SPEC_RANGE")])
 
-    def test_slightly_below_range_is_warning(self):
-        self.assertEqual(self.codes(self.card("Тканина: бязь, 90 г/м².")), [("WARN", "GSM_RANGE")])
-
-    def test_far_outside_range_is_error(self):
-        self.assertEqual(self.codes(self.card("Тканина: бязь, 400 г/м².")), [("ERROR", "GSM_RANGE")])
-        self.assertEqual(self.codes(self.card("Тканина: бязь, 50 г/м².", name="low.md")), [("ERROR", "GSM_RANGE")])
-
-    def test_five_percent_tolerance_above_range_edge(self):
-        # бязь: максимум 165, допуск 5 % -> 173.25; 170 ще у межах
-        self.assertEqual(self.codes(self.card("Тканина: бязь, 170 г/м².")), [])
-
-    def test_density_of_filling_is_not_checked_against_fabric(self):
-        self.assertEqual(self.codes(self.card("Ковдра з наповнювачем 400 г/м², чохол бязь.")), [])
+    def test_foam_density_far_outside_is_error(self):
+        self.assertEqual(self.codes(self.card("Щільність ППУ 350 кг/м³.")), [("ERROR", "SPEC_RANGE")])
+        self.assertEqual(self.codes(self.card("Наповнювач: ППУ 8 кг/м³.", name="low.md")), [("ERROR", "SPEC_RANGE")])
 
     def test_density_unit_variants(self):
-        self.assertEqual(self.codes(self.card("Бязь 400 gsm", name="gsm.md")), [("ERROR", "GSM_RANGE")])
-        self.assertEqual(self.codes(self.card("Бязь 400 g/m2", name="g.md")), [("ERROR", "GSM_RANGE")])
+        self.assertEqual(self.codes(self.card("Foam: PU foam 350 kg/m3", name="en.md")), [("ERROR", "SPEC_RANGE")])
+        self.assertEqual(self.codes(self.card("ППУ 350 кг/куб.м", name="cub.md")), [("ERROR", "SPEC_RANGE")])
 
-    def test_unknown_fabric_is_not_checked(self):
-        self.assertEqual(self.codes(self.card("Невідомий матеріал 900 г/м².")), [])
+    def test_density_takes_the_nearest_material_in_the_line(self):
+        self.assertEqual(self.codes(self.card("Каркас ДСП, наповнювач ППУ 35 кг/м³.")), [])
+        self.assertEqual(self.codes(self.card("ППУ 30 кг/м³, HR-піна 50 кг/м³.", name="hr.md")), [])
 
-    def test_thread_count_over_800_is_warning(self):
-        self.assertIn(("WARN", "THREAD_COUNT"), self.codes(self.card("Сатин 1000 TC.")))
+    def test_density_with_material_in_another_line_is_not_checked(self):
+        self.assertEqual(self.codes(self.card("Корпус: ДСП.\nЩільність наповнювача 35 кг/м³.")), [])
 
-    def test_thread_count_realistic_is_clean(self):
-        self.assertNotIn(("WARN", "THREAD_COUNT"), self.codes(self.card("Сатин 400 TC.")))
+    def test_board_thickness(self):
+        self.assertEqual(self.codes(self.card("Корпус: ЛДСП 16 мм, кромка ПВХ 2 мм.")), [])
+        self.assertEqual(self.codes(self.card("Корпус: ЛДСП 160 мм.", name="b.md")), [("ERROR", "SPEC_RANGE")])
+        self.assertEqual(self.codes(self.card("Задня стінка: ДВП 8 мм.", name="c.md")), [("WARN", "SPEC_RANGE")])
+
+    def test_thickness_ignores_other_millimetre_values(self):
+        self.assertEqual(self.codes(self.card("Корпус ЛДСП 18 мм, напрямні 450 мм, петлі з чашкою 35 мм.")), [])
+        self.assertEqual(self.codes(self.card("Габарити: 2000×600×2200 мм, ЛДСП 18 мм.", name="d.md")), [])
+
+    def test_material_right_after_the_number(self):
+        self.assertEqual(self.codes(self.card("Корпус: 160 мм ЛДСП.")), [("ERROR", "SPEC_RANGE")])
+
+    def test_glass_thickness_and_the_word_sklad(self):
+        self.assertEqual(self.codes(self.card("Скло 4 мм. Склад: 16 мм.")), [])
+
+    def test_martindale(self):
+        self.assertEqual(self.codes(self.card("Тканина: велюр, 50 000 циклів за Мартіндейлом.")), [])
+        self.assertEqual(self.codes(self.card("Тканина: шеніл, Martindale 1 500 000.", name="m.md")), [("ERROR", "SPEC_RANGE")])
+        self.assertEqual(self.codes(self.card("Мартіндейл: 35 тис. циклів.", name="k.md")), [])
+        self.assertEqual(self.codes(self.card("Мартіндейл 4 000 циклів.", name="lo.md")), [("ERROR", "SPEC_RANGE")])
+
+    def test_springs_per_square_metre(self):
+        self.assertEqual(self.codes(self.card("Блок незалежних пружин: 256 пружин/м².")), [])
+        self.assertEqual(self.codes(self.card("Мультипакет 5000 пружин на м².", name="s.md")), [("ERROR", "SPEC_RANGE")])
+
+    def test_mattress_height(self):
+        self.assertEqual(self.codes(self.card("Матрац Comfort, висота 22 см.")), [])
+        self.assertEqual(self.codes(self.card("Матрац, висота 220 см.", name="h.md")), [("ERROR", "SPEC_RANGE")])
+        self.assertEqual(self.codes(self.card("Топер, висота 6 см.", name="t.md")), [])
+        self.assertEqual(self.codes(self.card("Ліжко, висота 45 см.", name="bed.md")), [])
+
+    def test_unknown_material_is_not_checked(self):
+        self.assertEqual(self.codes(self.card("Невідомий матеріал 900 кг/м³, 900 мм.")), [])
+
+    def test_large_numbers_are_readable_in_messages(self):
+        rc, issues = self.lint(self.card("Martindale 1 500 000."))
+        self.assertIn("1 500 000", issues[0]["msg"])
+
+
+class LintDimensions(LintBase):
+    def test_millimetres_labelled_as_centimetres_are_an_error(self):
+        self.assertEqual(self.codes(self.card("Розміри: 2000×900×750 см.")), [("ERROR", "DIM_UNIT")])
+
+    def test_real_centimetres_are_clean(self):
+        self.assertEqual(self.codes(self.card("Розміри: 200×90×75 см.")), [])
+        self.assertEqual(self.codes(self.card("Ліжко 160×200 см.", name="bed.md")), [])
+
+    def test_millimetres_are_clean(self):
+        self.assertEqual(self.codes(self.card("Розміри: 2000×900×750 мм.")), [])
+
+    def test_unit_in_the_label_before_the_numbers(self):
+        self.assertEqual(self.codes(self.card("Розміри (Ш×Г×В), см: 2000×600×2200.")), [("ERROR", "DIM_UNIT")])
+        self.assertEqual(self.codes(self.card("Розміри (Ш×Г×В), мм: 2000×600×2200.", name="mm.md")), [])
+
+    def test_separators_x_and_cyrillic_kh(self):
+        self.assertEqual(self.codes(self.card("Розміри: 2000x900x750 см.", name="x.md")), [("ERROR", "DIM_UNIT")])
+        self.assertEqual(self.codes(self.card("Розміри: 2000 х 900 х 750 см.", name="kh.md")), [("ERROR", "DIM_UNIT")])
+
+    def test_single_dimension(self):
+        self.assertEqual(self.codes(self.card("Ширина: 1600 см.")), [("ERROR", "DIM_UNIT")])
+        self.assertEqual(self.codes(self.card("Ширина: 160 см.", name="ok.md")), [])
+
+    def test_no_unit_is_not_checked(self):
+        self.assertEqual(self.codes(self.card("Артикул 2000×900.")), [])
 
 
 # =================================================================== lint_content: заяви та догляд
@@ -289,7 +342,7 @@ class LintLanguageAndSkips(LintBase):
 
     def test_cli_exit_code_follows_errors(self):
         self.assertEqual(self.lint(self.card("Склад: 70% бавовна, 20% поліестер."))[0], 1)
-        self.assertEqual(self.lint(self.card("Тканина: бязь, 185 г/м²."), )[0], 0)  # лише WARN
+        self.assertEqual(self.lint(self.card("Наповнювач: ППУ 50 кг/м³."), )[0], 0)  # лише WARN
         self.assertEqual(self.lint(self.card("Просто текст.", name="ok.md"))[0], 0)
 
 
@@ -314,12 +367,12 @@ class LintHookMode(LintBase):
             self.assertEqual(json.loads(self.post(p, tool=tool)[1])["decision"], "block", tool)
 
     def test_warnings_only_become_additional_context(self):
-        p = self.card("Тканина: бязь, 185 г/м².")
+        p = self.card("Наповнювач: ППУ 50 кг/м³.")
         rc, out, err = self.post(p)
         d = json.loads(out)
         self.assertNotIn("decision", d)
         self.assertEqual(d["hookSpecificOutput"]["hookEventName"], "PostToolUse")
-        self.assertIn("GSM_RANGE", d["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("SPEC_RANGE", d["hookSpecificOutput"]["additionalContext"])
 
     def test_error_plus_warning_blocks_and_keeps_warning(self):
         p = self.card("Склад: 70% бавовна, 20% поліестер. Гіпоалергенна.")
@@ -683,7 +736,7 @@ class ShippedData(unittest.TestCase):
             return json.loads(f.read().decode("utf-8"))
 
     def test_data_files_are_valid_json(self):
-        for name in ("config.json", "fibres.json", "fabric_specs.json"):
+        for name in ("config.json", "fibres.json", "product_specs.json"):
             self.assertIsInstance(self.load(name), dict, name)
 
     def test_shipped_config_has_no_confidential_terms_and_a_valid_date(self):
@@ -692,11 +745,17 @@ class ShippedData(unittest.TestCase):
         self.assertEqual(cfg["confidential_terms"], [])
         self.assertTrue(re.match(r"^[0-9]{2}\.[0-9]{2}\.[0-9]{4}$", cfg["legal_as_of"]))
 
-    def test_every_fabric_range_is_sane(self):
-        for fab in self.load("fabric_specs.json")["fabrics"]:
-            lo, hi = fab["gsm"]
-            self.assertTrue(0 < lo < hi, fab["key"])
-            self.assertTrue(fab["aliases"], fab["key"])
+    def test_every_spec_range_is_sane(self):
+        specs = self.load("product_specs.json")
+        for kind in ("density", "thickness", "mattress_height"):
+            for it in specs[kind]["items"]:
+                lo, hi = it["range"]
+                self.assertTrue(0 < lo < hi, it["key"])
+                self.assertTrue(it["aliases"], it["key"])
+        for kind in ("martindale", "springs_per_m2"):
+            lo, hi = specs[kind]["range"]
+            self.assertTrue(0 < lo < hi, kind)
+        self.assertGreater(specs["dimensions"]["max_cm"], 0)
 
 
 # =================================================================== конфіг проєкту — ненадійний вхід
@@ -818,7 +877,7 @@ class OutputSanitizing(Sandbox):
         self.assert_clean(self.lint(p), "block/filename")
 
     def test_filename_with_newline_cannot_add_lines_to_a_warning(self):
-        p = self.make(u"b\n" + INJECT + u".md", u"Тканина: бязь, 185 г/м².\n")
+        p = self.make(u"b\n" + INJECT + u".md", u"Наповнювач: ППУ 50 кг/м³.\n")
         self.assert_clean(self.lint(p), "warn/filename")
 
     def test_long_filename_is_capped(self):
