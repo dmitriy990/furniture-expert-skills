@@ -1,6 +1,6 @@
 # Spec: furniture-expert skill v1.0.0
 
-Status: draft for review (2026-10-23). This file and `tasks/` are working material: the last task deletes
+Status: complete, all questions answered, awaiting approval (2026-10-23). This file and `tasks/` are working material: the last task deletes
 them, because the package validator rejects them in a release tree.
 
 ## Objective
@@ -17,7 +17,9 @@ on Horoshop. The owner talks to Claude in Russian or Ukrainian. Customers read U
 **Store terms the skill must use (as of 23.10.2026):**
 
 - The customer pays for delivery, lifting to the floor and assembly as separate services.
-- Exception: the store pays for delivery on orders of 19 000 UAH or more delivered within Kyiv.
+- Exception: the store pays for delivery, and only delivery, on orders delivered within Kyiv whose goods
+  total is 19 000 UAH or more (exactly 19 000 qualifies). The goods total excludes paid services. Lifting
+  and assembly stay paid by the customer on these orders too.
 - Some manufacturers forbid selling below their recommended retail price (RRP/МРЦ). The project config
   lists them by name, and the restriction applies only to them.
 - Imports come from Poland (EU, zero duty under the free trade area only with proof of EU origin; goods
@@ -183,8 +185,11 @@ assumption words now include кубатура/м³, доставка, підйо
   and assembly are paid by the customer, so they are not in the cost by default. The one exception is
   free Kyiv delivery. When the retail price is at or above the threshold (`--free-delivery-from`, default
   19 000 UAH), the cost includes the expected delivery cost: Kyiv delivery cost × share of orders
-  delivered in Kyiv. Both are inputs. Output: unit cost, net and retail price, achieved margin at a given
-  retail price, gap to RRP.
+  delivered in Kyiv. Both are inputs. The calculator works per item, so it uses the item's own price as
+  the test. An item below 19 000 UAH can still ship in a qualifying order, such as chairs bought with a
+  table. For such items the owner can give the share of their sales that ship free in Kyiv
+  (`--free-delivery-share-pct`), which replaces the price test. Lifting and assembly never enter the cost.
+  Output: unit cost, net and retail price, achieved margin at a given retail price, gap to RRP.
 - `import`: the template's formula (customs value, duty, import VAT as a cost for non-payers, broker,
   inland, bank, QC, losses). Freight is given per shipment or per m³ with `--unit-cbm`, which covers a
   truck from Poland and a container from China. Packaging and damage allowance are included. The duty rate
@@ -272,7 +277,7 @@ def main():
    - RRP column, no manufacturer column, list not empty → one ask for the batch
 6. The `landed_cost.py` example in each mode matches a hand calculation to the kopiyka, and the
    test asserts it. In local mode, a price of 19 000 UAH or more adds the expected Kyiv delivery cost and
-   a price just below it does not.
+   a price just below it does not, unless `--free-delivery-share-pct` is given.
 7. `ukraine-legal.md` has an "as of" date and a primary source for every rule. Nothing in it is
    undated.
 8. `evals/cases.json` has ≥ 12 well-formed cases meeting the coverage above. The results of a first
@@ -286,13 +291,11 @@ def main():
 1. Imports: Poland and China.
 2. Shop platform: Horoshop. The MCP matcher stays.
 3. RRP: enforced per manufacturer via `rrp_enforced_brands`, empty by default.
-4. Delivery, lifting and assembly are paid by the customer. Exception: the store pays delivery on orders
-   of 19 000 UAH or more within Kyiv.
+4. Delivery, lifting and assembly are paid by the customer. Exception: the store pays delivery, and only
+   delivery, on Kyiv orders whose goods total is 19 000 UAH or more. Exactly 19 000 qualifies, and paid
+   services do not count toward the total.
 5. I create `main` from the release commit at the end.
 
 ## Open Questions
 
-1. **What the Kyiv exception covers.** I assume the store pays only for delivery, and lifting and assembly
-   stay paid by the customer even on those orders. Is that right?
-2. **What counts toward 19 000 UAH.** I assume it is the order total for goods, without paid services,
-   and that "from 19 000" includes exactly 19 000. Is that right?
+None.
