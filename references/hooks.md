@@ -102,7 +102,7 @@
 python3 -I hooks/lint_content.py --file draft.md             # проверка текста/фида
 python3 -I hooks/lint_content.py --file draft.md --internal  # как внутренний документ
 python3 -I hooks/price_guard.py --csv prices.csv             # проверка прайс-листа
-python3 -I scripts/landed_cost.py --goods 2.8 --qty 5000 --fx 41.5 --duty-pct 10 --margin-pct 35
+python3 -I scripts/landed_cost.py --mode import --goods 42 --qty 360 --fx 41.5 --duty-pct 10 --margin-pct 35
 ```
 
 Правило для Claude в таких средах: **перед тем как отдать пользователю текст карточки или прайс — прогнать `lint_content.py`/`price_guard.py` и исправить ERROR**; ответ с юридическим/расчётным содержанием — с датой актуальности и допущениями.

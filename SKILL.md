@@ -72,7 +72,7 @@ hooks:
 
 ### C. Себестоимость и цена
 1. Запроси/зафиксируй: цена товара и валюта, объём, доставка до границы Украины, курс, ставка мита (из подтверждения брокера), платник ПДВ или нет, брокер, внутренняя логистика, банк/конвертация, QC, потери %, целевая маржа.
-2. Запусти `python3 -I "${CLAUDE_SKILL_DIR}/scripts/landed_cost.py" --goods … --qty … --fx … [--freight … --duty-pct … --vat-payer yes|no --broker-uah … --inland-uah … --bank-pct … --qc-uah … --loss-pct … --margin-pct … --retail-price …]`.
+2. Запусти `python3 -I "${CLAUDE_SKILL_DIR}/scripts/landed_cost.py" --mode import --goods … --qty … --fx … --duty-pct … [--freight … | --unit-cbm … --freight-per-cbm …] [--vat-payer yes|no --broker-uah … --inland-uah … --bank-pct … --qc-uah … --packaging-uah … --damage-pct … --margin-pct … --retail-price … --rrp …]`.
 3. В ответе: таблица затрат, цена без ПДВ и розница, маржа, **список допущений и что нужно подтвердить** (ставка мита по УКТЗЕД, статус ПДВ, курс на дату декларации). Сценарий «хуже на 5–10 %».
 
 ### D. Приёмка и контроль качества

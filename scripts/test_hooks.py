@@ -727,12 +727,15 @@ class StopCheck(Sandbox):
 # =================================================================== landed_cost
 
 LC = os.path.join(SCRIPTS, "landed_cost.py")
-# приклад із references/economics-and-pricing.md
-EXAMPLE = ["--goods", "2.8", "--qty", "5000", "--freight", "650", "--fx", "41.5", "--duty-pct", "10",
-           "--broker-uah", "9000", "--inland-uah", "6500", "--loss-pct", "3", "--margin-pct", "35"]
+# приклади з references/economics-and-pricing.md; очікувані числа пораховано вручну за формулами з docstring
+CHINA = ["--mode", "import", "--goods", "42", "--qty", "360", "--fx", "41.5", "--unit-cbm", "0.18",
+         "--freight-per-cbm", "95", "--duty-pct", "10", "--broker-uah", "12000", "--inland-uah", "18000",
+         "--qc-uah", "4000", "--damage-pct", "3", "--margin-pct", "35"]
+POLAND = ["--mode", "import", "--goods", "120", "--qty", "80", "--currency", "EUR", "--fx", "45.2",
+          "--freight", "1400", "--duty-pct", "0", "--broker-uah", "8000", "--damage-pct", "2", "--margin-pct", "35"]
 
 
-class LandedCost(Sandbox):
+class LandedCostBase(Sandbox):
     def calc(self, *args):
         rc, out, err = self.run_script(LC, list(args))
         return rc, out, err
@@ -742,71 +745,99 @@ class LandedCost(Sandbox):
         self.assertEqual((rc, err), (0, ""))
         return json.loads(out)
 
-    def test_documented_example_for_non_vat_payer(self):
-        d = self.data(*(EXAMPLE + ["--vat-payer", "no"]))
-        self.assertAlmostEqual(d["total_cost_uah"], 823837.00, places=2)
-        self.assertAlmostEqual(d["unit_cost_uah"], 169.86, places=2)
-        self.assertAlmostEqual(d["price_net_uah"], 261.33, places=2)
-        self.assertAlmostEqual(d["price_retail_uah"], 261.33, places=2)
+
+class LandedCostImport(LandedCostBase):
+    def test_china_container_by_volume_for_non_vat_payer(self):
+        d = self.data(*CHINA)
+        self.assertAlmostEqual(d["volume_m3"], 64.8, places=6)
+        self.assertAlmostEqual(d["freight_cur"], 6156.00, places=2)          # 64.8 м³ × 95
+        self.assertAlmostEqual(d["customs_value_uah"], 882954.00, places=2)  # (15 120 + 6 156) × 41.5
+        self.assertAlmostEqual(d["duty_uah"], 88295.40, places=2)
+        self.assertAlmostEqual(d["import_vat_uah"], 194249.88, places=2)
+        self.assertAlmostEqual(d["bank_fee_uah"], 6274.80, places=2)
+        self.assertAlmostEqual(d["total_cost_uah"], 1205774.08, places=2)
+        self.assertAlmostEqual(d["sellable_qty"], 349.2, places=6)
+        self.assertAlmostEqual(d["unit_cost_uah"], 3452.96, places=2)
+        self.assertAlmostEqual(d["price_retail_uah"], 5312.25, places=2)
         self.assertTrue(d["import_vat_in_cost"])
 
-    def test_documented_example_for_vat_payer(self):
-        d = self.data(*(EXAMPLE + ["--vat-payer", "yes"]))
-        self.assertAlmostEqual(d["total_cost_uah"], 690082.50, places=2)
-        self.assertAlmostEqual(d["unit_cost_uah"], 142.29, places=2)
-        self.assertAlmostEqual(d["price_net_uah"], 218.90, places=2)
-        self.assertAlmostEqual(d["price_retail_uah"], 262.68, places=2)
+    def test_china_container_for_vat_payer(self):
+        d = self.data(*(CHINA + ["--vat-payer", "yes"]))
+        self.assertAlmostEqual(d["total_cost_uah"], 1011524.20, places=2)
+        self.assertAlmostEqual(d["unit_cost_uah"], 2896.69, places=2)
+        self.assertAlmostEqual(d["price_net_uah"], 4456.45, places=2)
+        self.assertAlmostEqual(d["price_retail_uah"], 5347.74, places=2)
         self.assertFalse(d["import_vat_in_cost"])
 
+    def test_poland_truck_with_eu_origin(self):
+        d = self.data(*POLAND)
+        self.assertIsNone(d["volume_m3"])
+        self.assertAlmostEqual(d["customs_value_uah"], 497200.00, places=2)
+        self.assertAlmostEqual(d["duty_uah"], 0.0, places=6)
+        self.assertAlmostEqual(d["total_cost_uah"], 608979.20, places=2)
+        self.assertAlmostEqual(d["unit_cost_uah"], 7767.59, places=2)
+        self.assertAlmostEqual(d["price_retail_uah"], 11950.14, places=2)
+
+    def test_packaging_is_per_unit(self):
+        base = self.data(*POLAND)["total_cost_uah"]
+        self.assertAlmostEqual(self.data(*(POLAND + ["--packaging-uah", "150"]))["total_cost_uah"], base + 150 * 80, places=2)
+
     def test_default_is_non_vat_payer(self):
-        self.assertEqual(self.data(*EXAMPLE)["total_cost_uah"], self.data(*(EXAMPLE + ["--vat-payer", "no"]))["total_cost_uah"])
+        self.assertEqual(self.data(*CHINA)["total_cost_uah"], self.data(*(CHINA + ["--vat-payer", "no"]))["total_cost_uah"])
 
     def test_margin_is_of_revenue_not_markup(self):
-        d = self.data(*EXAMPLE)
-        self.assertAlmostEqual(d["markup_pct"], 53.846, places=2)           # маржа 35 % = націнка 53.8 %
-        self.assertAlmostEqual(self.data("--goods", "1", "--qty", "10", "--fx", "10", "--bank-pct", "0",
-                                         "--loss-pct", "0", "--margin-pct", "50")["markup_pct"], 100.0, places=6)
+        self.assertAlmostEqual(self.data(*CHINA)["markup_pct"], 53.846, places=2)  # маржа 35 % = націнка 53.8 %
+        d = self.data("--mode", "import", "--goods", "1", "--qty", "10", "--fx", "10", "--duty-pct", "0",
+                      "--bank-pct", "0", "--damage-pct", "0", "--margin-pct", "50")
+        self.assertAlmostEqual(d["markup_pct"], 100.0, places=6)
 
-    def test_losses_reduce_sellable_quantity(self):
-        d = self.data(*EXAMPLE)
-        self.assertAlmostEqual(d["sellable_qty"], 4850.0, places=6)
-
-    def test_retail_price_check_returns_achieved_margin(self):
-        d = self.data(*(EXAMPLE + ["--retail-price", "261.33"]))
+    def test_retail_price_and_rrp(self):
+        d = self.data(*(CHINA + ["--retail-price", "5312.25", "--rrp", "5600"]))
         self.assertAlmostEqual(d["achieved_margin_pct"], 35.0, places=1)
-        d = self.data(*(EXAMPLE + ["--vat-payer", "yes", "--retail-price", "262.68"]))
-        self.assertAlmostEqual(d["achieved_margin_pct"], 35.0, places=1)
+        self.assertAlmostEqual(d["rrp_gap_uah"], 5312.25 - 5600, places=1)
+        self.assertGreater(d["margin_at_rrp_pct"], 35.0)
 
-    def test_text_report_contains_assumptions_and_disclaimer(self):
-        rc, out, err = self.calc(*EXAMPLE)
+    def test_worse_scenarios(self):
+        d = self.data(*CHINA)
+        self.assertAlmostEqual(d["worse_5_unit_cost_uah"], d["unit_cost_uah"] * 1.05, places=6)
+        self.assertAlmostEqual(d["worse_10_price_retail_uah"], d["unit_cost_uah"] * 1.10 / 0.65, places=6)
+
+    def test_text_report_lists_assumptions_and_disclaimer(self):
+        rc, out, err = self.calc(*CHINA)
         self.assertEqual(rc, 0)
-        for fragment in ("Повна собівартість:", "823837.00", "169.86", "261.33", "Це оцінка"):
+        for fragment in ("64.800 м³ × 95 USD/м³", "мито 10 %", "Пошкодження/брак: 3 %", "1205774.08", "3452.96",
+                         "5312.25", "Сценарій «гірше»", "Це оцінка"):
             self.assertIn(fragment, out)
 
     def test_currency_label_is_printed(self):
-        rc, out, err = self.calc(*(EXAMPLE + ["--currency", "EUR"]))
+        rc, out, err = self.calc(*POLAND)
         self.assertIn("EUR", out)
 
     def test_yes_no_synonyms(self):
         for yes in ("yes", "так", "y", "true", "1"):
-            self.assertFalse(self.data(*(EXAMPLE + ["--vat-payer", yes]))["import_vat_in_cost"], yes)
+            self.assertFalse(self.data(*(CHINA + ["--vat-payer", yes]))["import_vat_in_cost"], yes)
         for no in ("no", "ні", "n", "false", "0"):
-            self.assertTrue(self.data(*(EXAMPLE + ["--vat-payer", no]))["import_vat_in_cost"], no)
+            self.assertTrue(self.data(*(CHINA + ["--vat-payer", no]))["import_vat_in_cost"], no)
 
     def test_invalid_input_exits_2_without_traceback(self):
-        base = ["--goods", "1", "--qty", "10", "--fx", "40"]
+        base = ["--mode", "import", "--goods", "1", "--qty", "10", "--fx", "40", "--duty-pct", "5"]
         bad = [
-            ["--goods", "abc", "--qty", "10", "--fx", "40"],
-            ["--goods", "1", "--qty", "0", "--fx", "40"],
-            ["--goods", "1", "--qty", "-5", "--fx", "40"],
-            ["--goods", "1", "--qty", "10", "--fx", "0"],
-            ["--goods", "nan", "--qty", "10", "--fx", "40"],
-            ["--goods", "inf", "--qty", "10", "--fx", "40"],
+            ["--goods", "1", "--qty", "10", "--fx", "40", "--duty-pct", "5"],          # без --mode
+            ["--mode", "import", "--goods", "1", "--qty", "10", "--fx", "40"],         # без ставки мита
+            ["--mode", "import", "--goods", "abc", "--qty", "10", "--fx", "40", "--duty-pct", "5"],
+            ["--mode", "import", "--goods", "1", "--qty", "0", "--fx", "40", "--duty-pct", "5"],
+            ["--mode", "import", "--goods", "1", "--qty", "-5", "--fx", "40", "--duty-pct", "5"],
+            ["--mode", "import", "--goods", "1", "--qty", "10", "--fx", "0", "--duty-pct", "5"],
+            ["--mode", "import", "--goods", "nan", "--qty", "10", "--fx", "40", "--duty-pct", "5"],
+            ["--mode", "import", "--goods", "inf", "--qty", "10", "--fx", "40", "--duty-pct", "5"],
+            base + ["--freight", "100", "--unit-cbm", "0.2", "--freight-per-cbm", "90"],  # обидва способи доставки
+            base + ["--freight-per-cbm", "90"],                                        # тариф без обсягу
             base + ["--margin-pct", "100"],
-            base + ["--loss-pct", "100"],
+            base + ["--damage-pct", "100"],
             base + ["--vat-payer", "maybe"],
             base + ["--retail-price", "0"],
-            ["--goods", "1", "--qty", "10"],
+            base + ["--rrp", "0"],
+            ["--mode", "wholesale"],
         ]
         for args in bad:
             rc, out, err = self.calc(*args)
