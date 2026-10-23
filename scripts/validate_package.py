@@ -59,7 +59,7 @@ LOAD_BUDGET = (4200, 55000)        # SKILL.md plus the largest reference
 ALL_REFERENCES_WORDS = 11000       # everything loaded at once
 
 CONFIG_KEYS = {"min_gross_margin_pct", "price_outlier_ratio", "lint_block_on_error", "stop_check_enabled",
-               "legal_as_of", "confidential_terms"}
+               "legal_as_of", "confidential_terms", "rrp_enforced_brands"}
 EVAL_CATEGORIES = {
     "composition", "origin_claims", "legal_dating", "confidentiality", "landed_cost", "language",
     "unsupported_claims", "routing", "price_sanity", "missing_data",
@@ -493,6 +493,7 @@ def validate(root: Path) -> list[tuple[str, bool, str]]:
     unknown = sorted(k for k in cfg if k not in CONFIG_KEYS and not k.startswith("_"))
     check("data/config.json has only known keys", not unknown, ", ".join(unknown))
     check("shipped confidential_terms is empty", cfg.get("confidential_terms") == [], repr(cfg.get("confidential_terms")))
+    check("shipped rrp_enforced_brands is empty", cfg.get("rrp_enforced_brands") == [], repr(cfg.get("rrp_enforced_brands")))
     check("legal_as_of is a DD.MM.YYYY date", bool(re.fullmatch(r"[0-9]{2}\.[0-9]{2}\.[0-9]{4}", str(cfg.get("legal_as_of", "")))))
     specs = data["product_specs.json"][0] if isinstance(data["product_specs.json"][0], dict) else {}
 
@@ -734,6 +735,7 @@ def mutations():
         ("spec with an inverted range", _json("data/product_specs.json", lambda d: d["density"]["items"][0].update({"range": [45, 16]}))),
         ("spec without a dimension limit", _json("data/product_specs.json", lambda d: d["dimensions"].pop("max_cm"))),
         ("data file corrupted", _write("data/materials.json", "{not json")),
+        ("shipped config names a manufacturer", _json("data/config.json", lambda d: d.update({"rrp_enforced_brands": ["Фабрика"]}))),
         ("material without tokens", _json("data/materials.json", lambda d: d["materials"]["mdf"].update({"tokens": []}))),
         ("plugin version not bumped", _json(".claude-plugin/plugin.json", lambda d: d.update({"version": "0.0.1"}))),
         ("plugin author with an e-mail", _json(".claude-plugin/plugin.json", lambda d: d["author"].update({"email": "a@example.com"}))),

@@ -11,7 +11,10 @@ furniture-expert / price_guard.py  —  PreToolUse-хук.
   * ціна < 0 або не число (NaN/inf), ціна нижча за собівартість (якщо вона є в даних),
     маржа нижча за поріг (config: min_gross_margin_pct), викид відносно медіани партії
     (config: price_outlier_ratio — «зайвий/пропущений нуль»), «знижка» ≥ 50 % від старої ціни,
-    нечитабельне значення ціни.
+    нечитабельне значення ціни;
+  * ціна нижча за рекомендовану роздрібну (RRP/МРЦ) — лише для виробників зі списку
+    config: rrp_enforced_brands (у проєкті: .claude/furniture-expert.json); якщо список не порожній,
+    а в даних є RRP без колонки виробника, — одне питання на всю партію.
 
 Рішення: deny — безумовні помилки; ask — підозріле, питаємо людину; нічого не виводимо — якщо все гаразд.
 
@@ -47,20 +50,29 @@ DEFAULT_CONFIG = {
     "stop_check_enabled": True,
     "legal_as_of": "",
     "confidential_terms": [],
+    "rrp_enforced_brands": [],
 }
 
 PRICE_KEYS = ("price", "price_uah", "retail_price", "ціна", "цена")
 OLD_KEYS = ("price_old", "old_price", "oldprice", "стара_ціна")
 COST_KEYS = ("cost", "cost_price", "purchase_price", "price_purchase", "собівартість", "себестоимость", "закупка")
+RRP_KEYS = ("rrp", "rrp_price", "price_rrp", "msrp", "recommended_price", "мрц", "ррц", "рекомендована_ціна")
+BRAND_KEYS = ("brand", "manufacturer", "vendor", "producer", "виробник", "бренд", "фабрика", "производитель",
+              "producent", "marka")
 ID_KEYS = ("article", "sku", "артикул", "code", "id", "title", "name")
 
 PRICE_NAMES = {"price", "price uah", "ціна", "ціна грн", "цена", "цена грн", "роздрібна ціна", "retail price", "retail",
-               "verkaufspreis", "vk preis", "vk", "preço de venda", "pvp"}
+               "cena", "cena brutto", "cena detaliczna"}
 OLD_NAMES = {"price old", "old price", "oldprice", "стара ціна", "старая цена", "price old uah"}
 COST_NAMES = {"cost", "cost price", "purchase price", "price purchase", "собівартість", "себестоимость", "закупка",
-              "закупівельна ціна", "закупочная цена", "einkaufspreis", "ek preis", "ek", "preço de custo", "custo",
-              "preço de compra"}
-ID_NAMES = {"article", "sku", "артикул", "код", "id", "artikel", "artikelnummer", "referência", "ref"}
+              "закупівельна ціна", "закупочная цена", "дилерська ціна", "дилерская цена", "вхідна ціна", "dealer price",
+              "cena zakupu"}
+RRP_NAMES = {"rrp", "rrp price", "price rrp", "msrp", "recommended price", "recommended retail price", "мрц", "ррц",
+             "мрц грн", "rrp uah", "рекомендована ціна", "рекомендована роздрібна ціна", "рекомендованная цена",
+             "рекомендованная розничная цена", "cena sugerowana"}
+BRAND_NAMES = {"brand", "manufacturer", "vendor", "producer", "виробник", "бренд", "фабрика", "производитель",
+               "producent", "marka"}
+ID_NAMES = {"article", "sku", "артикул", "код", "id", "ref", "indeks", "kod"}
 
 
 # ---------------------------------------------------------------- конфіг
@@ -97,7 +109,16 @@ def sanitize_config(cfg):
 
     num("min_gross_margin_pct", 0, 99.9)
     num("price_outlier_ratio", 2, 100000)
+    b = cfg.get("rrp_enforced_brands")
+    if isinstance(b, list):
+        d["rrp_enforced_brands"] = sorted(set(
+            brand_key(x) for x in b[:500] if isinstance(x, str) and 1 <= len(x.strip()) <= 80))
     return d
+
+
+def brand_key(s):
+    """Назва виробника для порівняння: без регістру, зайвих і нерозривних пробілів."""
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", s)).strip().casefold()
 
 
 def load_config(project_dir=None):
@@ -165,6 +186,9 @@ def walk(obj, records, depth=0):
         low = {str(k).lower(): v for k, v in obj.items()}
         old = next((parse_num(low[k]) for k in OLD_KEYS if k in low and not _empty(low[k])), None)
         cost = next((parse_num(low[k]) for k in COST_KEYS if k in low and not _empty(low[k])), None)
+        rrp = next((parse_num(low[k]) for k in RRP_KEYS if k in low and not _empty(low[k])), None)
+        brand = next((str(low[k]) for k in BRAND_KEYS if k in low and isinstance(low[k], (str, int))
+                      and not isinstance(low[k], bool)), None)
         ident = ""
         for k in ID_KEYS:
             if k in low and isinstance(low[k], (str, int)) and not isinstance(low[k], bool):
@@ -174,7 +198,7 @@ def walk(obj, records, depth=0):
             if k in low and not _empty(low[k]):
                 raw = low[k]
                 val = parse_num(raw)
-                rec = {"price": val, "old": old, "cost": cost, "id": ident, "bad": None}
+                rec = {"price": val, "old": old, "cost": cost, "rrp": rrp, "brand": brand, "id": ident, "bad": None}
                 if val is None:
                     rec["bad"] = "nonfinite" if isinstance(raw, float) else _clean(str(raw), 30)
                 records.append(rec)
@@ -215,6 +239,8 @@ def records_from_csv(content):
     oi = next((i for i, h in enumerate(hdr) if h in OLD_NAMES), None)
     ci = next((i for i, h in enumerate(hdr) if h in COST_NAMES), None)
     ii = next((i for i, h in enumerate(hdr) if h in ID_NAMES), None)
+    ri = next((i for i, h in enumerate(hdr) if h in RRP_NAMES), None)
+    bi = next((i for i, h in enumerate(hdr) if h in BRAND_NAMES), None)
     recs = []
     scanned = 0
     while scanned < MAX_ROWS_SCANNED:
@@ -232,6 +258,8 @@ def records_from_csv(content):
             "price": val,
             "old": parse_num(r[oi]) if oi is not None and len(r) > oi else None,
             "cost": parse_num(r[ci]) if ci is not None and len(r) > ci else None,
+            "rrp": parse_num(r[ri]) if ri is not None and len(r) > ri else None,
+            "brand": (r[bi] if len(r) > bi else "") if bi is not None else None,
             "id": (_clean(r[ii], 40) if ii is not None and len(r) > ii else ""),
             "bad": None if val is not None else _clean(r[pi], 30),
         }
@@ -263,6 +291,8 @@ def evaluate(recs, cfg):
     deny, ask = [], []
     min_margin = float(cfg.get("min_gross_margin_pct", 20))
     ratio = float(cfg.get("price_outlier_ratio", 30))
+    enforced = set(cfg.get("rrp_enforced_brands") or [])
+    rrp_without_brand = False
 
     good = []
     for r in recs:
@@ -287,9 +317,20 @@ def evaluate(recs, cfg):
                 m = (p - r["cost"]) / p * 100.0
                 if m < min_margin:
                     ask.append("валова маржа %.1f %% < порогу %g %% (ціна %g, собівартість %g)%s" % (m, min_margin, p, r["cost"], tag))
+        if enforced and r.get("rrp") and r["rrp"] > 0 and p > 0:
+            if r.get("brand") is None:
+                rrp_without_brand = True
+            elif p < r["rrp"] and brand_key(r["brand"]) in enforced:
+                ask.append("ціна %g нижча за рекомендовану роздрібну (RRP/МРЦ) %g виробника «%s»%s: за дилерською угодою "
+                           "продаж нижче RRP заборонено — підтвердіть, що це погоджено" % (
+                               p, r["rrp"], _clean(r["brand"], 40), tag))
         if r.get("old") and r["old"] > 0 and p > 0 and p <= r["old"] * 0.5:
             ask.append("«знижка» %.0f %% (стара %g → нова %g)%s: підтвердіть, що товар справді продавався за старою ціною" % (
                 (1 - p / r["old"]) * 100, r["old"], p, tag))
+
+    if rrp_without_brand:
+        ask.append("у даних є RRP/МРЦ, але немає колонки виробника (brand/виробник): не можу перевірити виробників із "
+                   "rrp_enforced_brands — додайте колонку або перевірте ціни нижче RRP вручну")
 
     prices = [r["price"] for r in good if r["price"] > 0]
     if len(prices) >= 5:

@@ -511,6 +511,56 @@ class PriceGuard(Sandbox):
     def test_clean_prices_pass_silently(self):
         self.assertEqual(self.write_csv("sku,price,cost\nA1,200,100\nA2,300,150\n"), (None, ""))
 
+    # ---- RRP/МРЦ лише для виробників зі списку
+    def test_listed_brand_below_rrp_asks(self):
+        self.project_config({"rrp_enforced_brands": ["Фабрика А"]})
+        decision, reason = self.write_csv("sku,brand,price,rrp\nS1,Фабрика А,18000,19500\n")
+        self.assertEqual(decision, "ask")
+        self.assertIn("RRP", reason)
+        self.assertIn("Фабрика А", reason)
+
+    def test_brand_names_match_without_case_and_extra_spaces(self):
+        self.project_config({"rrp_enforced_brands": ["фабрика  а"]})
+        self.assertEqual(self.write_csv("sku,виробник,ціна,мрц\nS1,ФАБРИКА А,18000,19500\n")[0], "ask")
+
+    def test_unlisted_brand_below_rrp_passes(self):
+        self.project_config({"rrp_enforced_brands": ["Фабрика А"]})
+        self.assertEqual(self.write_csv("sku,brand,price,rrp\nS1,Brand B,18000,19500\n"), (None, ""))
+
+    def test_listed_brand_at_or_above_rrp_passes(self):
+        self.project_config({"rrp_enforced_brands": ["Фабрика А"]})
+        self.assertEqual(self.write_csv("sku,brand,price,rrp\nS1,Фабрика А,19500,19500\nS2,Фабрика А,21000,19500\n"), (None, ""))
+
+    def test_row_without_rrp_value_passes(self):
+        self.project_config({"rrp_enforced_brands": ["Фабрика А"]})
+        self.assertEqual(self.write_csv("sku,brand,price,rrp\nS1,Фабрика А,18000,\n"), (None, ""))
+
+    def test_rrp_without_brand_column_asks_once(self):
+        self.project_config({"rrp_enforced_brands": ["Фабрика А"]})
+        decision, reason = self.write_csv("sku,price,rrp\nS1,18000,19500\nS2,9000,9900\nS3,5000,4000\n")
+        self.assertEqual(decision, "ask")
+        self.assertEqual(reason.count("немає колонки виробника"), 1)
+
+    def test_empty_list_means_no_rrp_check(self):
+        self.assertEqual(self.write_csv("sku,brand,price,rrp\nS1,Фабрика А,18000,19500\n"), (None, ""))
+        self.assertEqual(self.write_csv("sku,price,rrp\nS1,18000,19500\n", name="nobrand.csv"), (None, ""))
+
+    def test_rrp_in_mcp_import_payload(self):
+        self.project_config({"rrp_enforced_brands": ["Фабрика А"]})
+        rc, out, err = self.pre("mcp__abc123__catalog_import",
+                                {"products": [{"sku": "S1", "brand": "Фабрика А", "price": 18000, "rrp": 19500}]})
+        self.assertEqual(json.loads(out)["hookSpecificOutput"]["permissionDecision"], "ask")
+
+    def test_below_cost_still_denies_with_rrp(self):
+        self.project_config({"rrp_enforced_brands": ["Фабрика А"]})
+        decision, reason = self.write_csv("sku,brand,price,rrp,cost\nS1,Фабрика А,9000,19500,12000\n")
+        self.assertEqual(decision, "deny")
+
+    def test_rrp_config_of_the_wrong_type_is_ignored(self):
+        for bad in (5, {"Фабрика А": True}, "Фабрика А", [5, None, "", "x" * 200]):
+            self.project_config({"rrp_enforced_brands": bad})
+            self.assertEqual(self.write_csv("sku,brand,price,rrp\nS1,Фабрика А,18000,19500\n"), (None, ""), repr(bad)[:40])
+
     # ---- формати
     def test_ukrainian_header_with_bom_and_semicolons(self):
         decision, reason = self.write_csv(u"﻿Артикул;Ціна (грн);Собівартість\nA1;-5;10\n")
@@ -771,6 +821,7 @@ class ShippedData(unittest.TestCase):
         import re
         cfg = self.load("config.json")
         self.assertEqual(cfg["confidential_terms"], [])
+        self.assertEqual(cfg["rrp_enforced_brands"], [])
         self.assertTrue(re.match(r"^[0-9]{2}\.[0-9]{2}\.[0-9]{4}$", cfg["legal_as_of"]))
 
     def test_every_spec_range_is_sane(self):
