@@ -233,14 +233,31 @@ class LintDimensions(LintBase):
 
 class LintClaims(LintBase):
     def test_medical_claim_is_warning(self):
-        self.assertIn(("WARN", "CLAIM_MED"), self.codes(self.card("Гіпоалергенна ковдра.")))
+        self.assertIn(("WARN", "CLAIM_MED"), self.codes(self.card("Ортопедичний матрац.")))
+        self.assertIn(("WARN", "CLAIM_MED"), self.codes(self.card("Анатомічний матрац.", name="a.md")))
 
-    def test_certificate_claim_is_warning_once(self):
-        p = self.card("OEKO-TEX Standard 100.\n\nЩе раз OEKO-TEX.")
+    def test_eco_claims_are_warnings(self):
+        codes = self.codes(self.card("Екологічно чисті матеріали, без формальдегіду."))
+        self.assertEqual(codes.count(("WARN", "CLAIM_ECO")), 2)
+
+    def test_emission_class_is_warning_once(self):
+        p = self.card("Клас емісії E1.\n\nДСП класу Е1, фасади E0,5.")
         self.assertEqual(self.codes(p).count(("WARN", "CLAIM_CERT")), 1)
 
+    def test_certificates_are_warnings(self):
+        for i, text in enumerate(("Сертифікат FSC.", "Оббивка: тканина OEKO-TEX.", "Плита CARB P2.", "Super E0.")):
+            self.assertIn(("WARN", "CLAIM_CERT"), self.codes(self.card(text, name="c%d.md" % i)), text)
+
+    def test_model_codes_are_not_emission_classes(self):
+        self.assertEqual(self.codes(self.card("Модель E10, артикул E100.")), [])
+
     def test_origin_claim_is_warning(self):
-        self.assertIn(("WARN", "CLAIM_ORIGIN"), self.codes(self.card("Єгипетська бавовна найвищої якості.")))
+        self.assertIn(("WARN", "CLAIM_ORIGIN"), self.codes(self.card("Made in Poland.")))
+        self.assertIn(("WARN", "CLAIM_ORIGIN"), self.codes(self.card("Європейська якість за доступною ціною.", name="eu.md")))
+        self.assertIn(("WARN", "CLAIM_ORIGIN"), self.codes(self.card("Польські меблі для дому.", name="pl.md")))
+
+    def test_ukrainian_production_is_not_an_origin_claim(self):
+        self.assertEqual(self.codes(self.card("Виробництво: Україна.")), [])
 
 
 # =================================================================== lint_content: витік закупівельних даних
@@ -253,7 +270,18 @@ class LintLeaks(LintBase):
         self.assertEqual(self.leaks("Собівартість 150 грн."), [("ERROR", "LEAK")])
 
     def test_purchase_price_with_currency_is_error(self):
-        self.assertEqual(self.leaks("Закупівельна ціна 2.8 USD за метр."), [("ERROR", "LEAK")])
+        self.assertEqual(self.leaks("Закупівельна ціна 42 USD за стілець."), [("ERROR", "LEAK")])
+
+    def test_dealer_price_is_error(self):
+        self.assertEqual(self.leaks("Дилерська ціна 12 000 грн."), [("ERROR", "LEAK")])
+        self.assertEqual(self.leaks("Вхідна ціна 9 500 грн.", name="in.md"), [("ERROR", "LEAK")])
+        self.assertEqual(self.leaks("Знижка дилера 25 %.", name="disc.md"), [("ERROR", "LEAK")])
+
+    def test_dealer_price_in_internal_file_is_not_a_leak(self):
+        self.assertEqual(self.leaks("Дилерська ціна 12 000 грн.", name="dealer_internal.md"), [])
+
+    def test_factory_price_marketing_is_not_a_leak(self):
+        self.assertEqual(self.leaks("Ціни від виробника, доставка по Києву."), [])
 
     def test_incoterms_price_is_error(self):
         self.assertEqual(self.leaks("Умови: FOB 2.8 USD."), [("ERROR", "LEAK")])
@@ -283,7 +311,7 @@ class LintLeaks(LintBase):
         self.assertEqual(self.leaks("Собівартість 150 грн.", folder="costs"), [])
 
     def test_lookalike_folder_is_not_internal(self):
-        self.assertEqual(self.leaks("Собівартість 150 грн.", folder="costa-textile"), [("ERROR", "LEAK")])
+        self.assertEqual(self.leaks("Собівартість 150 грн.", folder="costa-furniture"), [("ERROR", "LEAK")])
 
     def test_cli_internal_flag_forces_internal(self):
         p = self.card("Собівартість 150 грн.")
@@ -294,12 +322,16 @@ class LintLeaks(LintBase):
         self.assertEqual([i["code"] for i in self.lint(p, "--public")[1]], ["LEAK"])
 
     def test_confidential_term_from_project_config_is_error(self):
-        self.project_config({"confidential_terms": ["АкмеТекстиль"]})
-        self.assertEqual(self.leaks("Партнер: АкмеТекстиль."), [("ERROR", "LEAK_TERM")])
+        self.project_config({"confidential_terms": ["АкмеМеблі"]})
+        self.assertEqual(self.leaks("Партнер: АкмеМеблі."), [("ERROR", "LEAK_TERM")])
 
     def test_csv_cost_column_is_error(self):
         p = self.write("feed.csv", "sku,price,cost\nA1,100,60\n")
         self.assertIn(("ERROR", "LEAK_COL"), self.codes(p))
+
+    def test_csv_dealer_price_column_is_error_and_rrp_is_not(self):
+        self.assertIn(("ERROR", "LEAK_COL"), self.codes(self.write("feed.csv", "sku,price,dealer price\nA1,100,60\n")))
+        self.assertNotIn(("ERROR", "LEAK_COL"), self.codes(self.write("feed2.csv", "sku,price,rrp\nA1,100,110\n")))
 
     def test_csv_cost_column_allowed_in_internal_file(self):
         p = self.write("feed.csv", "furniture-expert:internal\nsku,price,cost\nA1,100,60\n")
@@ -309,7 +341,7 @@ class LintLeaks(LintBase):
 # =================================================================== lint_content: мова та пропуски
 
 class LintLanguageAndSkips(LintBase):
-    RU = "Постельное бельё: ткань хлопок, размер 200х220, цвет белый, стирка 40."
+    RU = "Шкаф-купе: корпус ЛДСП, размер 200х60х220, цвет белый, сборка бесплатно."
 
     def test_russian_text_is_warning(self):
         self.assertIn(("WARN", "LANG_RU"), self.codes(self.card(self.RU)))
@@ -318,7 +350,10 @@ class LintLanguageAndSkips(LintBase):
         self.assertNotIn(("WARN", "LANG_RU"), self.codes(self.card("furniture-expert:lang=ru\n\n" + self.RU)))
 
     def test_ukrainian_text_is_clean(self):
-        self.assertEqual(self.codes(self.card("Постільна білизна: тканина бавовна, розмір 200×220, колір білий.")), [])
+        self.assertEqual(self.codes(self.card("Шафа-купе: корпус ЛДСП, розмір 200×60×220 см, колір білий.")), [])
+
+    def test_russian_furniture_words_are_counted(self):
+        self.assertIn(("WARN", "LANG_RU"), self.codes(self.card("Шкаф-купе, кровать и стул.", name="ru.md")))
 
     def test_readme_and_skill_files_are_never_linted(self):
         for name in ("README.md", "SKILL.md", "CLAUDE.md", "CHANGELOG.md"):
@@ -960,14 +995,14 @@ class LintMarkupLeaks(LintBase):
 
     # ---- хибні спрацьовування: CSS — не закупівельні дані
     def test_css_in_style_block_is_not_a_leak(self):
-        self.assertEqual(self.leaks("p.html", u"<html><style>p{margin:0 10px}</style><p>Бязь 100% бавовна</p></html>"), [])
+        self.assertEqual(self.leaks("p.html", u"<html><style>p{margin:0 10px}</style><p>Шафа, корпус ЛДСП 16 мм</p></html>"), [])
 
     def test_css_in_script_block_is_not_a_leak(self):
-        self.assertEqual(self.leaks("s.html", u"<script>el.style.margin = '0 10px';</script><p>Бязь</p>"), [])
+        self.assertEqual(self.leaks("s.html", u"<script>el.style.margin = '0 10px';</script><p>Шафа</p>"), [])
 
     def test_css_in_style_attribute_is_not_a_leak(self):
-        self.assertEqual(self.leaks("a.html", u"<p style=\"margin:0 10px\">Бязь</p>"), [])
-        self.assertEqual(self.leaks("b.html", u"<p style='margin-top: 4px'>Бязь</p>"), [])
+        self.assertEqual(self.leaks("a.html", u"<p style=\"margin:0 10px\">Шафа</p>"), [])
+        self.assertEqual(self.leaks("b.html", u"<p style='margin-top: 4px'>Шафа</p>"), [])
 
     def test_css_code_fence_in_markdown_is_not_a_leak(self):
         self.assertEqual(self.leaks("c.md", u"# Стилі\n\n```css\n.card{margin:0 auto}\n```\n"), [])
@@ -977,7 +1012,7 @@ class LintMarkupLeaks(LintBase):
         self.assertEqual(self.leaks("v.html", u"<p>Собівартість 150 грн</p>"), [("ERROR", "LEAK")])
 
     def test_leak_in_html_comment_is_still_detected(self):
-        self.assertEqual(self.leaks("k.html", u"<p>Бязь</p><!-- Собівартість 150 грн -->"), [("ERROR", "LEAK")])
+        self.assertEqual(self.leaks("k.html", u"<p>Шафа</p><!-- Собівартість 150 грн -->"), [("ERROR", "LEAK")])
 
     def test_prose_margin_percentage_is_still_blocked(self):
         # навмисне правило: проза на кшталт «маржа 24 %» у публічному тексті блокується
