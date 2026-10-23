@@ -11,8 +11,18 @@ It copies the structure, safety model and quality bar of
 content, data, checks and calculator are about furniture.
 
 **User.** The owner or manager of an online furniture store in Ukraine. The store mostly resells Ukrainian
-factories, holding stock or using dropship, and also imports some lines. The owner talks to Claude in
-Russian or Ukrainian. Customers read Ukrainian.
+factories, holding stock or using dropship, and imports some lines from Poland and China. The shop runs
+on Horoshop. The owner talks to Claude in Russian or Ukrainian. Customers read Ukrainian.
+
+**Store terms the skill must use (as of 23.10.2026):**
+
+- The customer pays for delivery, lifting to the floor and assembly as separate services.
+- Exception: the store pays for delivery on orders of 19 000 UAH or more delivered within Kyiv.
+- Some manufacturers forbid selling below their recommended retail price (RRP/МРЦ). The project config
+  lists them by name, and the restriction applies only to them.
+- Imports come from Poland (EU, zero duty under the free trade area only with proof of EU origin; goods
+  made in Asia and sold through Polish distributors are not of EU origin) and from China (regular duty
+  rate, confirmed with a broker).
 
 **Product groups in v1.0.0, all four:**
 
@@ -29,12 +39,15 @@ Russian or Ukrainian. Customers read Ukrainian.
    dimensions W×D×H in cm, materials listed per element (body, facade, frame, filling, upholstery), and no
    unprovable claims. Where data is missing, it lists what it needs.
 2. The owner asks what the retail price of a factory sofa should be. The skill runs the calculator
-   (supplier price, VAT status, delivery, lifting, assembly, damage and returns, payment fees, margin),
-   lists its assumptions, and compares the result with the factory's recommended retail price (RRP/МРЦ).
-3. The owner asks what an imported batch of chairs from China really costs. The calculator allocates
-   freight by volume (m³), adds duty, VAT, broker and inland delivery, and allows for damage.
-4. A price list goes to the shop. The hooks block a price below cost and ask about a price below RRP,
-   a 50 % "discount" or an extra zero.
+   (supplier price, VAT status, delivery to the warehouse or dropship fee, the expected cost of free Kyiv
+   delivery when the price is 19 000 UAH or more, damage and returns, payment fees, margin), lists its
+   assumptions, and compares the result with the factory's recommended retail price (RRP/МРЦ).
+3. The owner asks what an imported container of chairs from China, or a truckload of chests from Poland,
+   really costs. The calculator allocates freight by volume (m³), adds duty, VAT, broker and inland
+   delivery, and allows for damage. For Polish goods the skill asks for proof of EU origin before it uses
+   a zero duty rate.
+4. A price list goes to the shop. The hooks block a price below cost. They ask about a price below RRP
+   for a manufacturer that forbids it, a 50 % "discount" or an extra zero.
 5. A public text contains the dealer price, the factory's name as a supplier, or "solid wood" for an MDF
    facade. The hooks block it.
 6. A customer complains about a scratched facade after delivery, or wants to return a sofa ordered
@@ -84,22 +97,25 @@ SKILL.md                         skill: base rules R1–R9, workflows W-A…W-G,
                                  NEVER list, response format, hooks block in frontmatter
 references/
   materials-and-construction.md  boards, solid wood, veneer, facades, edging, fittings, emissions, metal,
-                                 outdoor materials; supplier vocabulary (PL/TR/IT/EN/CN → UA)
+                                 outdoor materials; supplier vocabulary (PL/EN → UA, including the English
+                                 terms Chinese suppliers use)
   upholstery-and-mattresses.md   frames, seat bases, foams, mechanisms, upholstery fabrics, leather vs
                                  eco-leather, mattresses and bases
   suppliers-and-origins.md       Ukrainian factories (dealer terms, RRP, stock vs dropship, lead times),
-                                 import countries, supplier checklist
+                                 imports from Poland and China (origin, logistics, MOQ, payment),
+                                 supplier checklist
   quality-control.md             acceptance, transport damage, assembly check, test standards, certificates,
                                  claims to supplier and from customers
   ukraine-legal.md               labelling and product information, returns, warranty, distance selling,
                                  import duty/VAT/origin, advertising (all dated, all sourced)
   economics-and-pricing.md       local resale and import unit economics, RRP, volumetric freight, last mile,
                                  lifting and assembly, damage and returns, stock vs dropship
-  content-and-seo.md             product card template, standard sizes, SEO, customer reply templates
+  content-and-seo.md             product card template, standard sizes, delivery/lifting/assembly terms,
+                                 SEO, customer reply templates
   hooks.md                       what the hooks check, configuration, exceptions, manual run
 data/
-  config.json                    hook defaults (template keys + rrp_check_enabled)
-  materials.json                 material dictionary: tokens in uk/ru/en/pl/tr/it, family, naming rules
+  config.json                    hook defaults (template keys + rrp_enforced_brands, empty by default)
+  materials.json                 material dictionary: tokens in uk/ru/en/pl, family, naming rules
   product_specs.json             typical ranges per measurable parameter and product type
 hooks/
   lint_content.py                PostToolUse: checks written content
@@ -134,14 +150,27 @@ textile checks for composition, GSM and washing are replaced with these:
 | ERROR | Dimension unit error: a single furniture dimension in cm far outside physical limits, e.g. `2000×900×750 см` (looks like mm) |
 | ERROR | A measurable parameter far outside its range (< 0.6 × min or > 1.8 × max from `product_specs.json`): foam density kg/m³, Martindale cycles, board thickness mm, springs per m², mattress height and so on |
 | ERROR | Material contradiction in one block: an element made of ДСП/МДФ/ДВП called "масив"/"натуральне дерево"/"solid wood"; eco-leather/PU/PVC called "натуральна шкіра" |
-| WARN | Parameter outside the typical range; unproven claims ("ортопедичний", "анатомічний", "гіпоалергенний", "антибактеріальний", "екологічно чистий", "без формальдегіду"); emission or certificate claims (E0/E0.5/E1, CARB, FSC, Greenguard, OEKO-TEX) without a document; origin claims ("Made in Italy", "італійські меблі", "європейська якість"); Russian words in Ukrainian text, with a furniture-specific word list |
+| WARN | Parameter outside the typical range; unproven claims ("ортопедичний", "анатомічний", "гіпоалергенний", "антибактеріальний", "екологічно чистий", "без формальдегіду"); emission or certificate claims (E0/E0.5/E1, CARB, FSC, Greenguard, OEKO-TEX) without a document; origin claims ("Made in Poland", "Made in EU", "польські меблі", "європейська якість"); Russian words in Ukrainian text, with a furniture-specific word list |
 | Kept as is | `PARTIAL`, `SCAN_FAILED`, internal-file detection by name tokens and marker, skip list, size and time limits, output sanitising |
 
 **`price_guard`** stays as in the template (deny: negative, NaN/inf, below cost; ask: zero, unreadable,
 margin under threshold, ≥ 50 % discount, outlier against the batch median, unparseable price CSV), with one
-addition. When the data has an RRP/МРЦ column and `rrp_check_enabled` is true, a price below RRP is `ask`,
-because dealer agreements often forbid it. The column recognises `rrp`, `мрц`, `рекомендована ціна` and
-variants. The Horoshop MCP matcher is unchanged.
+addition: a per-manufacturer RRP check.
+
+- The project config `<project>/.claude/furniture-expert.json` holds `rrp_enforced_brands`, a list of
+  manufacturer names, for example `["Фабрика А", "Brand B"]`. The shipped default is an empty list, so
+  the check is off until the owner names the restricted manufacturers.
+- For a row whose manufacturer is on the list, a price below its RRP is `ask`. Rows from other
+  manufacturers and rows with no RRP value are not checked.
+- Names are matched case-insensitively with whitespace normalised. The manufacturer column is recognised as
+  `brand`, `manufacturer`, `vendor`, `producer`, `виробник`, `бренд`, `фабрика`, `producent`, `marka` and
+  variants. The RRP column is recognised as `rrp`, `мрц`, `рекомендована ціна` and variants. The same keys
+  are read from Horoshop MCP import records.
+- If the list is not empty and the data has an RRP column but no manufacturer column, the hook cannot tell
+  which rows are restricted. It asks once for the whole batch instead of passing it silently.
+- The config value is sanitised like `confidential_terms`: strings only, with limits on count and length.
+
+The Horoshop MCP matcher is unchanged.
 
 **`stop_check`** works as before but for furniture topics. It wants a date and a source for answers that
 touch three or more legal, customs or tax topics. It wants assumptions for any cost answer, and the
@@ -150,12 +179,16 @@ assumption words now include кубатура/м³, доставка, підйо
 **`landed_cost.py`** has two modes:
 
 - `local`: supplier price in UAH with or without VAT, the store's VAT status, delivery to the warehouse or
-  a dropship fee, last-mile delivery and lifting if the store pays for them, assembly if it is free for the
-  customer, damage and returns %, payment or marketplace fee %, target margin. Output: unit cost, net and
-  retail price, achieved margin at a given retail price, gap to RRP.
+  a dropship fee, damage and returns %, payment or marketplace fee %, target margin. Delivery, lifting
+  and assembly are paid by the customer, so they are not in the cost by default. The one exception is
+  free Kyiv delivery. When the retail price is at or above the threshold (`--free-delivery-from`, default
+  19 000 UAH), the cost includes the expected delivery cost: Kyiv delivery cost × share of orders
+  delivered in Kyiv. Both are inputs. Output: unit cost, net and retail price, achieved margin at a given
+  retail price, gap to RRP.
 - `import`: the template's formula (customs value, duty, import VAT as a cost for non-payers, broker,
-  inland, bank, QC, losses). Freight is given per shipment or per m³ with `--unit-cbm`. Packaging and
-  damage allowance are included.
+  inland, bank, QC, losses). Freight is given per shipment or per m³ with `--unit-cbm`, which covers a
+  truck from Poland and a container from China. Packaging and damage allowance are included. The duty rate
+  is always an input, never a built-in default.
 
 Both modes print every assumption and a "5–10 % worse" scenario hint, and validate inputs as the template
 does.
@@ -199,7 +232,8 @@ def main():
   data files, config keys and eval categories are updated. `--self-test` must still prove every check
   can fail.
 - **Behavioural evals**, `evals/cases.json`, judged by hand per `evals/JUDGE.md`. At least 12 cases. They
-  cover all four product groups, both business modes (resale and import), and every category:
+  cover all four product groups, resale and both import routes (Poland with and without proof of EU
+  origin, China), the per-manufacturer RRP rule, the Kyiv delivery exception, and every category:
   `materials`, `dimensions`, `origin_claims`, `legal_dating`, `confidentiality`, `landed_cost`,
   `price_sanity`, `language`, `unsupported_claims`, `routing`, `missing_data`, `dealer_terms`.
 - **CI**: the workflow runs all three commands on 3.9, 3.12 and 3.13.
@@ -211,8 +245,8 @@ def main():
   script; run the validator, its self-test and the tests before every commit; commit messages without
   Co-Authored-By or "Generated with Claude" lines; keep the template's security hardening.
 - **Ask first:** adding a dependency; adding or changing hook events or matchers beyond the template;
-  changing size budgets; adding a reference beyond the eight listed; merging to `main`, tagging a
-  release or opening a PR; any change to the textile repo.
+  changing size budgets; adding a reference beyond the eight listed; tagging a release or opening a
+  PR; any change to the textile repo. Creating `main` from the release commit is already agreed.
 - **Never:** network, process, eval or disk-write calls in hooks and scripts; duty rates, law numbers or
   lists of non-returnable goods "from memory"; textile content left in place because it "probably
   applies"; secrets, real e-mails or absolute user paths in the repo; SPEC.md or `tasks/` in the release
@@ -232,24 +266,33 @@ def main():
    - `Оббивка: екошкіра (PU), натуральна шкіра` → ERROR `MAT_LEATHER`
    - `Ортопедичний матрац` → WARN
    - public card with `дилерська ціна 12 000 грн` → ERROR
-   - CSV row with price below cost → deny; below RRP → ask
+   - CSV row with price below cost → deny
+   - CSV row below RRP, manufacturer in `rrp_enforced_brands` → ask
+   - the same row, manufacturer not in the list → no output
+   - RRP column, no manufacturer column, list not empty → one ask for the batch
 6. The `landed_cost.py` example in each mode matches a hand calculation to the kopiyka, and the
-   test asserts it.
+   test asserts it. In local mode, a price of 19 000 UAH or more adds the expected Kyiv delivery cost and
+   a price just below it does not.
 7. `ukraine-legal.md` has an "as of" date and a primary source for every rule. Nothing in it is
    undated.
 8. `evals/cases.json` has ≥ 12 well-formed cases meeting the coverage above. The results of a first
    manual run are reported to you and not committed.
-9. The version is v1.0.0 and agrees across `SKILL.md`, `plugin.json` and `README.md`. Installing from the
-   marketplace commands in the README works once the repo has a `main` branch.
+9. The version is v1.0.0 and agrees across `SKILL.md`, `plugin.json` and `README.md`.
+10. `main` exists on GitHub and points at the release commit. Switching the repository's default branch to
+    `main` is done by you in the GitHub settings, since this session has no tool for it.
+
+## Decisions (answered 23.10.2026)
+
+1. Imports: Poland and China.
+2. Shop platform: Horoshop. The MCP matcher stays.
+3. RRP: enforced per manufacturer via `rrp_enforced_brands`, empty by default.
+4. Delivery, lifting and assembly are paid by the customer. Exception: the store pays delivery on orders
+   of 19 000 UAH or more within Kyiv.
+5. I create `main` from the release commit at the end.
 
 ## Open Questions
 
-1. **Import countries.** I assume China, Poland, Turkey, Italy and Malaysia/Vietnam. Which countries do you
-   actually import from?
-2. **Shop platform.** Is it still Horoshop? The `price_guard` MCP matcher assumes Horoshop's import tools.
-3. **RRP/МРЦ.** Do your factory agreements forbid selling below RRP? If not, should the below-RRP check be
-   off by default?
-4. **Delivery and assembly.** Does the store pay for last-mile delivery, lifting to the floor and assembly,
-   or does the customer pay separately? This decides the calculator defaults and the card template.
-5. **Branch.** The GitHub repo is empty, so the first push of this branch will likely become its default
-   branch. Should I also create `main` at release, or do you prefer to handle that?
+1. **What the Kyiv exception covers.** I assume the store pays only for delivery, and lifting and assembly
+   stay paid by the customer even on those orders. Is that right?
+2. **What counts toward 19 000 UAH.** I assume it is the order total for goods, without paid services,
+   and that "from 19 000" includes exactly 19 000. Is that right?
