@@ -80,15 +80,16 @@ pip install pyyaml                               # once, to enable the validator
 python3 -I hooks/lint_content.py --file card.md [--internal] [--json]
 python3 -I hooks/price_guard.py --csv prices.csv
 echo '{"last_assistant_message":"..."}' | python3 -I hooks/stop_check.py
-python3 -I scripts/landed_cost.py --mode local  --supplier-price 18500 --qty 1 ... --margin-pct 30
-python3 -I scripts/landed_cost.py --mode import --goods 42 --qty 400 --fx 41.5 --unit-cbm 0.18 ... --margin-pct 35
+python3 -I scripts/landed_cost.py --mode local --supplier-price 18500 --supplier-vat included --inbound-uah 600 \
+    --damage-pct 2 --fee-pct 2 --kyiv-delivery-uah 900 --kyiv-share-pct 40 --margin-pct 30 --rrp 27900
+python3 -I scripts/landed_cost.py --mode import --goods 42 --qty 360 --fx 41.5 --unit-cbm 0.18 \
+    --freight-per-cbm 95 --duty-pct 10 --broker-uah 12000 --inland-uah 18000 --damage-pct 3 --margin-pct 35
 
 # Leftover check (must print nothing)
 grep -rniE 'textile|текстил' --exclude-dir=.git .
 ```
 
-The calculator's flag names above are illustrative. The plan fixes the final ones, and the spec is updated
-to match.
+Calculator flags as implemented in T7–T8; `--help` lists them all.
 
 ## Project Structure
 
@@ -180,7 +181,7 @@ assumption words now include кубатура/м³, доставка, підйо
 
 **`landed_cost.py`** has two modes:
 
-- `local`: supplier price in UAH with or without VAT, the store's VAT status, delivery to the warehouse or
+- `local`: supplier price in UAH with its VAT status (`--supplier-vat included|on-top|none`), the store's VAT status, delivery to the warehouse or
   a dropship fee, damage and returns %, payment or marketplace fee %, target margin. Delivery, lifting
   and assembly are paid by the customer, so they are not in the cost by default. The one exception is
   free Kyiv delivery. When the retail price is at or above the threshold (`--free-delivery-from`, default

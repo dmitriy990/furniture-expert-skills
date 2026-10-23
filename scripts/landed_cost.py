@@ -22,8 +22,22 @@ furniture-expert / scripts/landed_cost.py — собівартість один�
   продається           = qty × (1 − пошкодження %)       (пошкодження в дорозі, брак, некомплект)
   собівартість 1 од.   = собівартість партії / продається
 
+Режим local (закупівля в українського виробника, склад або дропшип):
+  python3 -I landed_cost.py --mode local --supplier-price 18500 --supplier-vat included --inbound-uah 600 \
+      --damage-pct 2 --fee-pct 2 --kyiv-delivery-uah 900 --kyiv-share-pct 40 --margin-pct 30 --rrp 27900
+
+Формули (local):
+  закупівля            = ціна виробника; ПДВ виробника (--supplier-vat included|on-top|none) — податковий кредит,
+                         якщо ви платник ПДВ, інакше частина собівартості
+  собівартість 1 од.   = (закупівля + доставка на склад або плата за дропшип) / (1 − пошкодження й повернення %)
+  Доставку, підйом на поверх і складання оплачує покупець — у собівартість не входять.
+
 Ціна (обидва режими):
-  ціна без ПДВ         = собівартість 1 од. / (1 − маржа %)       (маржа — від виручки без ПДВ)
+  безкоштовна доставка = --kyiv-delivery-uah × частка замовлень із Києва, якщо ціна для покупця ≥ --free-delivery-from
+                         (типово 19 000 грн, сума за товари без платних послуг); --free-delivery-share-pct задає частку
+                         продажів цього товару з безкоштовною доставкою напряму (замінює перевірку ціною)
+  ціна без ПДВ         = (собівартість 1 од. + безкоштовна доставка) / (1 − маржа % − комісія %)
+                         (маржа — від виручки без ПДВ; комісія оплати/маркетплейсу — від ціни, її ПДВ у кредит)
   ціна для покупця     = ціна без ПДВ × (1 + ПДВ), якщо ви платник ПДВ
 """
 from __future__ import print_function
@@ -100,7 +114,40 @@ def compute_import(a):
     }
 
 
+def compute_local(a):
+    rate = a.vat_pct / 100.0
+    if a.supplier_vat == "included":
+        gross, net = a.supplier_price, a.supplier_price / (1 + rate)
+    elif a.supplier_vat == "on-top":
+        gross, net = a.supplier_price * (1 + rate), a.supplier_price
+    else:
+        gross = net = a.supplier_price
+    purchase = net if yes(a.vat_payer) else gross
+    unit = (purchase + a.inbound_uah) / (1 - a.damage_pct / 100.0)
+    return {
+        "mode": "local",
+        "supplier_price_uah": a.supplier_price,
+        "supplier_vat": a.supplier_vat,
+        "purchase_gross_uah": gross,
+        "purchase_net_uah": net,
+        "purchase_in_cost_uah": purchase,
+        "inbound_uah": a.inbound_uah,
+        "unit_cost_uah": unit,
+    }
+
+
 # ---------------------------------------------------------------- ціна
+
+def delivery_cost(retail, a):
+    """Очікувана вартість безкоштовної доставки по Києву, яку платить магазин, на одиницю товару."""
+    if not a.kyiv_delivery_uah:
+        return 0.0
+    if a.free_delivery_share_pct is not None:
+        return a.kyiv_delivery_uah * a.free_delivery_share_pct / 100.0
+    if retail is not None and retail >= a.free_delivery_from:
+        return a.kyiv_delivery_uah * a.kyiv_share_pct / 100.0
+    return 0.0
+
 
 def net_of(retail, a):
     return retail / (1 + a.vat_pct / 100.0) if yes(a.vat_payer) else retail
@@ -111,21 +158,36 @@ def retail_of(net, a):
 
 
 def margin_at(retail, unit_cost, a):
+    """Валова маржа від виручки без ПДВ після комісії й безкоштовної доставки, %."""
     net = net_of(retail, a)
-    return (net - unit_cost) / net * 100.0 if net else None
+    if not net:
+        return None
+    return (net * (1 - a.fee_pct / 100.0) - unit_cost - delivery_cost(retail, a)) / net * 100.0
+
+
+def price_for(unit_cost, a):
+    """(ціна без ПДВ, вартість безкоштовної доставки) для цільової маржі. Доставка лише збільшує ціну, тож якщо ціна
+    без неї вже ≥ порогу, з нею теж буде ≥ порогу — розрахунок не зациклюється."""
+    k = 1 - (a.margin_pct + a.fee_pct) / 100.0
+    net = unit_cost / k
+    d = delivery_cost(retail_of(net, a), a)
+    return ((unit_cost + d) / k if d else net), d
 
 
 def compute_price(a, r):
     unit_cost = r["unit_cost_uah"]
+    r["fee_pct"] = a.fee_pct
     if a.margin_pct is not None:
-        net = unit_cost / (1 - a.margin_pct / 100.0)
+        net, d = price_for(unit_cost, a)
         r["target_margin_pct"] = a.margin_pct
         r["price_net_uah"] = net
         r["markup_pct"] = (net / unit_cost - 1) * 100.0 if unit_cost else None
         r["price_retail_uah"] = retail_of(net, a)
+        r["free_delivery_uah"] = d
     if a.retail_price is not None:
         r["given_retail_price_uah"] = a.retail_price
         r["given_net_price_uah"] = net_of(a.retail_price, a)
+        r["given_free_delivery_uah"] = delivery_cost(a.retail_price, a)
         r["achieved_margin_pct"] = margin_at(a.retail_price, unit_cost, a)
     if a.rrp is not None:
         r["rrp_uah"] = a.rrp
@@ -136,7 +198,7 @@ def compute_price(a, r):
         worse = unit_cost * (1 + k / 100.0)
         r["worse_%d_unit_cost_uah" % k] = worse
         if a.margin_pct is not None:
-            r["worse_%d_price_retail_uah" % k] = retail_of(worse / (1 - a.margin_pct / 100.0), a)
+            r["worse_%d_price_retail_uah" % k] = retail_of(price_for(worse, a)[0], a)
         if a.retail_price is not None:
             r["worse_%d_achieved_margin_pct" % k] = margin_at(a.retail_price, worse, a)
     return r
@@ -174,14 +236,45 @@ def report_import(a, r):
     ]
 
 
+def report_local(a, r):
+    vat_label = {"included": "ПДВ включено", "on-top": "ПДВ зверху", "none": "виробник не платник ПДВ"}[a.supplier_vat]
+    return [
+        "Вхідні: ціна виробника %.2f грн (%s); платник ПДВ: %s; доставка на склад або дропшип %.2f грн/од.; "
+        "пошкодження й повернення %g %%" % (a.supplier_price, vat_label, "так" if yes(a.vat_payer) else "ні",
+                                           a.inbound_uah, a.damage_pct),
+        "Доставку, підйом на поверх і складання оплачує покупець — у собівартість не входять.",
+        "",
+        "Закупівля з ПДВ:       %12.2f грн" % r["purchase_gross_uah"],
+        "Закупівля без ПДВ:     %12.2f грн" % r["purchase_net_uah"],
+        "У собівартості:        %12.2f грн  (%s)" % (
+            r["purchase_in_cost_uah"], "без ПДВ — податковий кредит" if yes(a.vat_payer) else "з ПДВ — ви не платник"),
+        "Доставка/дропшип:      %12.2f грн" % r["inbound_uah"],
+        "-" * 44,
+        "Собівартість 1 од.:    %12.2f грн" % r["unit_cost_uah"],
+    ]
+
+
+def report_delivery(a):
+    if not a.kyiv_delivery_uah:
+        return "Безкоштовну доставку по Києву не враховано (немає --kyiv-delivery-uah)."
+    if a.free_delivery_share_pct is not None:
+        return "Безкоштовна доставка по Києву: %.2f грн × %g %% продажів = %.2f грн на одиницю" % (
+            a.kyiv_delivery_uah, a.free_delivery_share_pct, a.kyiv_delivery_uah * a.free_delivery_share_pct / 100.0)
+    return ("Безкоштовна доставка по Києву від %.0f грн: %.2f грн × %g %% замовлень = %.2f грн на одиницю, "
+            "якщо ціна для покупця не нижча за поріг" % (a.free_delivery_from, a.kyiv_delivery_uah, a.kyiv_share_pct,
+                                                         a.kyiv_delivery_uah * a.kyiv_share_pct / 100.0))
+
+
 def report_price(a, r):
-    lines = []
+    lines = ["", "Комісія оплати/маркетплейсу: %g %% від ціни. %s" % (a.fee_pct, report_delivery(a))]
     if "price_net_uah" in r:
         lines += [
             "",
             "Цільова маржа %g %% від виручки → ціна без ПДВ: %.2f грн (націнка %.1f %%)" % (
                 r["target_margin_pct"], r["price_net_uah"], r["markup_pct"]),
-            "Ціна для покупця: %.2f грн" % r["price_retail_uah"],
+            "Ціна для покупця: %.2f грн%s" % (r["price_retail_uah"], (
+                " (враховано %.2f грн на безкоштовну доставку)" % r["free_delivery_uah"])
+                if r["free_delivery_uah"] else ""),
         ]
     if r.get("achieved_margin_pct") is not None:
         lines += ["", "При ціні %.2f грн (без ПДВ %.2f) валова маржа: %.1f %%" % (
@@ -229,6 +322,12 @@ def main(argv=None):
     g.add_argument("--bank-pct", type=num(0, 100), default=1.0, help="комісії банку та конвертації, %% від суми платежу")
     g.add_argument("--qc-uah", type=num(0, 1e12), default=0.0, help="інспекція перед відвантаженням, усього")
     g.add_argument("--packaging-uah", type=num(0, 1e9), default=0.0, help="додаткове пакування/перепакування, грн за одиницю")
+    loc = ap.add_argument_group("local")
+    loc.add_argument("--supplier-price", type=num(0, 1e9), default=None, help="ціна виробника за одиницю, грн")
+    loc.add_argument("--supplier-vat", choices=("included", "on-top", "none"), default="included",
+                     help="ПДВ у ціні виробника: included — включено, on-top — додається зверху, none — виробник не платник")
+    loc.add_argument("--inbound-uah", type=num(0, 1e9), default=0.0,
+                     help="доставка від виробника на склад або плата виробнику за дропшип, грн за одиницю")
     c = ap.add_argument_group("спільні")
     c.add_argument("--vat-pct", type=num(0, 100), default=20.0)
     c.add_argument("--vat-payer", type=yn, default="no", help="чи ви платник ПДВ: yes/no")
@@ -237,6 +336,14 @@ def main(argv=None):
     c.add_argument("--margin-pct", type=num(0, 99.99), default=None, help="цільова валова маржа від виручки без ПДВ, %%")
     c.add_argument("--retail-price", type=num(0, 1e12), default=None, help="перевірити маржу при заданій ціні для покупця, грн")
     c.add_argument("--rrp", type=num(0, 1e12), default=None, help="рекомендована роздрібна ціна виробника (RRP/МРЦ), грн")
+    c.add_argument("--fee-pct", type=num(0, 99.99), default=0.0, help="комісія оплати/маркетплейсу, %% від ціни для покупця")
+    c.add_argument("--kyiv-delivery-uah", type=num(0, 1e9), default=0.0,
+                   help="скільки коштує магазину одна доставка по Києву, яку він оплачує, грн")
+    c.add_argument("--kyiv-share-pct", type=num(0, 100), default=None, help="частка замовлень цього товару з доставкою по Києву, %%")
+    c.add_argument("--free-delivery-from", type=num(0, 1e12), default=19000.0,
+                   help="поріг безкоштовної доставки по Києву: сума за товари без платних послуг, грн (типово 19000)")
+    c.add_argument("--free-delivery-share-pct", type=num(0, 100), default=None,
+                   help="частка продажів цього товару з безкоштовною доставкою, %% (замінює перевірку ціною)")
     c.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
 
@@ -244,6 +351,10 @@ def main(argv=None):
         ap.error("retail-price має бути > 0")
     if a.rrp is not None and a.rrp <= 0:
         ap.error("rrp має бути > 0")
+    if a.margin_pct is not None and a.margin_pct + a.fee_pct >= 100:
+        ap.error("маржа + комісія мають бути < 100 %")
+    if a.kyiv_delivery_uah and a.kyiv_share_pct is None and a.free_delivery_share_pct is None:
+        ap.error("--kyiv-delivery-uah потребує --kyiv-share-pct (частка замовлень із Києва) або --free-delivery-share-pct")
     if a.mode == "import":
         missing = [f for f, v in (("--goods", a.goods), ("--qty", a.qty), ("--fx", a.fx), ("--duty-pct", a.duty_pct))
                    if v is None]
@@ -260,7 +371,12 @@ def main(argv=None):
         r = compute_import(a)
         lines = report_import(a, r)
     else:
-        ap.error("режим local ще не реалізовано")
+        if a.supplier_price is None:
+            ap.error("для --mode local потрібна --supplier-price")
+        if a.supplier_price <= 0:
+            ap.error("supplier-price має бути > 0")
+        r = compute_local(a)
+        lines = report_local(a, r)
     r = compute_price(a, r)
     print(json.dumps(r, ensure_ascii=False, indent=2, allow_nan=False) if a.json else "\n".join(lines + report_price(a, r)))
     return 0

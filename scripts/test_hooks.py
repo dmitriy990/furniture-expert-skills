@@ -731,6 +731,9 @@ LC = os.path.join(SCRIPTS, "landed_cost.py")
 CHINA = ["--mode", "import", "--goods", "42", "--qty", "360", "--fx", "41.5", "--unit-cbm", "0.18",
          "--freight-per-cbm", "95", "--duty-pct", "10", "--broker-uah", "12000", "--inland-uah", "18000",
          "--qc-uah", "4000", "--damage-pct", "3", "--margin-pct", "35"]
+SOFA = ["--mode", "local", "--supplier-price", "18500", "--supplier-vat", "included", "--inbound-uah", "600",
+        "--damage-pct", "2", "--fee-pct", "2", "--kyiv-delivery-uah", "900", "--kyiv-share-pct", "40",
+        "--margin-pct", "30", "--rrp", "27900"]
 POLAND = ["--mode", "import", "--goods", "120", "--qty", "80", "--currency", "EUR", "--fx", "45.2",
           "--freight", "1400", "--duty-pct", "0", "--broker-uah", "8000", "--damage-pct", "2", "--margin-pct", "35"]
 
@@ -838,6 +841,96 @@ class LandedCostImport(LandedCostBase):
             base + ["--retail-price", "0"],
             base + ["--rrp", "0"],
             ["--mode", "wholesale"],
+        ]
+        for args in bad:
+            rc, out, err = self.calc(*args)
+            self.assertEqual(rc, 2, args)
+            self.assertNotIn("Traceback", err, args)
+
+
+class LandedCostLocal(LandedCostBase):
+    def test_factory_sofa_for_non_vat_payer(self):
+        d = self.data(*SOFA)
+        self.assertEqual(d["mode"], "local")
+        self.assertAlmostEqual(d["purchase_in_cost_uah"], 18500.00, places=2)        # ПДВ виробника — витрата
+        self.assertAlmostEqual(d["unit_cost_uah"], 19489.80, places=2)               # (18 500 + 600) / 0.98
+        self.assertAlmostEqual(d["free_delivery_uah"], 360.00, places=2)             # 900 × 40 %, ціна ≥ 19 000
+        self.assertAlmostEqual(d["price_retail_uah"], 29190.88, places=2)            # (19 489.80 + 360) / (1 − 0.30 − 0.02)
+        self.assertAlmostEqual(d["rrp_gap_uah"], 1290.88, places=2)
+        self.assertAlmostEqual(d["margin_at_rrp_pct"], 26.85, places=2)
+
+    def test_factory_sofa_for_vat_payer(self):
+        d = self.data(*(SOFA + ["--vat-payer", "yes"]))
+        self.assertAlmostEqual(d["purchase_in_cost_uah"], 15416.67, places=2)        # 18 500 / 1.2 — ПДВ у кредит
+        self.assertAlmostEqual(d["unit_cost_uah"], 16343.54, places=2)
+        self.assertAlmostEqual(d["price_net_uah"], 24564.03, places=2)
+        self.assertAlmostEqual(d["price_retail_uah"], 29476.83, places=2)
+
+    def test_supplier_vat_variants(self):
+        base = ["--mode", "local", "--supplier-price", "18500", "--damage-pct", "0"]
+        self.assertAlmostEqual(self.data(*(base + ["--supplier-vat", "on-top"]))["purchase_in_cost_uah"], 22200.0, places=2)
+        self.assertAlmostEqual(self.data(*(base + ["--supplier-vat", "none"]))["purchase_in_cost_uah"], 18500.0, places=2)
+        self.assertAlmostEqual(self.data(*(base + ["--supplier-vat", "on-top", "--vat-payer", "yes"]))["purchase_in_cost_uah"],
+                               18500.0, places=2)
+        self.assertAlmostEqual(self.data(*(base + ["--supplier-vat", "none", "--vat-payer", "yes"]))["purchase_in_cost_uah"],
+                               18500.0, places=2)
+
+    def test_kyiv_delivery_threshold_is_inclusive(self):
+        base = ["--mode", "local", "--supplier-price", "10000", "--damage-pct", "0", "--kyiv-delivery-uah", "900",
+                "--kyiv-share-pct", "100"]
+        at = self.data(*(base + ["--retail-price", "19000"]))
+        self.assertAlmostEqual(at["given_free_delivery_uah"], 900.0, places=2)
+        self.assertAlmostEqual(at["achieved_margin_pct"], 42.63, places=2)          # (19 000 − 10 000 − 900) / 19 000
+        below = self.data(*(base + ["--retail-price", "18999"]))
+        self.assertAlmostEqual(below["given_free_delivery_uah"], 0.0, places=6)
+        self.assertAlmostEqual(below["achieved_margin_pct"], 47.37, places=2)
+
+    def test_free_delivery_share_replaces_the_price_test(self):
+        d = self.data("--mode", "local", "--supplier-price", "10000", "--damage-pct", "0", "--kyiv-delivery-uah", "900",
+                      "--free-delivery-share-pct", "25", "--retail-price", "18999")
+        self.assertAlmostEqual(d["given_free_delivery_uah"], 225.0, places=2)
+        self.assertAlmostEqual(d["achieved_margin_pct"], 46.18, places=2)
+
+    def test_cheap_item_target_price_has_no_free_delivery(self):
+        d = self.data("--mode", "local", "--supplier-price", "4000", "--damage-pct", "0", "--kyiv-delivery-uah", "900",
+                      "--kyiv-share-pct", "40", "--margin-pct", "30")
+        self.assertAlmostEqual(d["free_delivery_uah"], 0.0, places=6)
+        self.assertAlmostEqual(d["price_retail_uah"], 4000 / 0.7, places=2)
+
+    def test_lifting_and_assembly_are_never_in_the_cost(self):
+        rc, out, err = self.calc(*SOFA)
+        self.assertIn("підйом на поверх і складання оплачує покупець", out)
+        rc, out, err = self.calc("--mode", "local", "--supplier-price", "100", "--lifting-uah", "50")
+        self.assertEqual(rc, 2)
+
+    def test_fee_is_part_of_the_price(self):
+        d = self.data("--mode", "local", "--supplier-price", "7000", "--damage-pct", "0", "--fee-pct", "10",
+                      "--margin-pct", "20")
+        self.assertAlmostEqual(d["price_retail_uah"], 10000.0, places=2)             # 7000 / (1 − 0.2 − 0.1)
+
+    def test_fees_and_free_delivery_apply_to_imports_too(self):
+        d = self.data(*(POLAND + ["--fee-pct", "2", "--kyiv-delivery-uah", "900", "--kyiv-share-pct", "40"]))
+        self.assertAlmostEqual(d["free_delivery_uah"], 0.0, places=6)              # ≈ 12 330 грн < 19 000: порогу не досягнуто
+        self.assertAlmostEqual(d["price_retail_uah"], 7767.5918 / 0.63, places=1)
+        d = self.data(*(POLAND + ["--fee-pct", "2", "--kyiv-delivery-uah", "900", "--free-delivery-share-pct", "40"]))
+        self.assertAlmostEqual(d["free_delivery_uah"], 360.0, places=2)
+        self.assertAlmostEqual(d["price_retail_uah"], (7767.5918 + 360) / 0.63, places=1)
+
+    def test_text_report(self):
+        rc, out, err = self.calc(*SOFA)
+        self.assertEqual(rc, 0)
+        for fragment in ("ПДВ включено", "19489.80", "29190.88", "враховано 360.00 грн на безкоштовну доставку",
+                         "RRP/МРЦ 27900.00", "вища за RRP на 1290.88", "Сценарій «гірше»"):
+            self.assertIn(fragment, out)
+
+    def test_invalid_local_input_exits_2(self):
+        bad = [
+            ["--mode", "local"],
+            ["--mode", "local", "--supplier-price", "0"],
+            ["--mode", "local", "--supplier-price", "100", "--supplier-vat", "maybe"],
+            ["--mode", "local", "--supplier-price", "100", "--margin-pct", "90", "--fee-pct", "10"],
+            ["--mode", "local", "--supplier-price", "100", "--kyiv-delivery-uah", "900"],
+            ["--mode", "local", "--supplier-price", "100", "--kyiv-share-pct", "140"],
         ]
         for args in bad:
             rc, out, err = self.calc(*args)

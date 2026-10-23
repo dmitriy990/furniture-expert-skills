@@ -175,7 +175,7 @@ packaging per unit, and the damage allowance. `--duty-pct` becomes required in i
 
 ## Task 8: Calculator local mode
 
-**Description:** Local mode takes the supplier price in UAH (`--supplier-vat-included yes|no`), the store's
+**Description:** Local mode takes the supplier price in UAH (`--supplier-vat included|on-top|none`), the store's
 VAT status, delivery to the warehouse or a dropship fee, damage and returns %, payment or marketplace fee
 %, margin, retail price and RRP. Free Kyiv delivery is added when the item price is at least
 `--free-delivery-from` (default 19000): `--kyiv-delivery-uah` × `--kyiv-share-pct`.
