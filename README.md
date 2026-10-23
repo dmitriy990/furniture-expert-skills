@@ -64,7 +64,7 @@ cp -R furniture-expert-skills/SKILL.md furniture-expert-skills/references furnit
 
 **Claude.ai or Cowork:** copy the same files into a `furniture-expert/` folder, delete the `hooks:` block from the frontmatter of `SKILL.md`, zip the folder and upload it as a custom skill. Hooks do not run there, so the skill follows its manual checks. Whether Claude.ai accepts the `hooks:` block was not tested, which is why it is removed.
 
-This is skill version **v1.0.0 (2026-10-09)**.
+This is skill version **v1.0.0 (2026-10-23)**.
 
 ## What is in the repo
 

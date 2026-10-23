@@ -28,4 +28,4 @@ claude plugin install furniture-expert@ivatech-furniture
 
 Довідкові файли написані російською, а все, що навичка пише для покупців, — українською.
 
-Версія **v1.0.0 (2026-10-09)**. Ліцензія MIT, див. [LICENSE](LICENSE).
+Версія **v1.0.0 (2026-10-23)**. Ліцензія MIT, див. [LICENSE](LICENSE).
